@@ -1,4 +1,5 @@
 import { TopNav } from "../components/TopNav.jsx";
+import { Footer } from "../components/Footer.jsx";
 
 const rules = [
   { id: "R-001", label: "Member Eligibility", scope: "All claims", hits: 248 },
@@ -12,9 +13,9 @@ const rules = [
 
 export default function Rules() {
   return (
-    <div className="min-h-screen bg-background text-foreground font-sans">
+    <div className="min-h-screen bg-background text-foreground font-sans flex flex-col">
       <TopNav />
-      <main className="max-w-7xl mx-auto px-6 py-8">
+      <main className="max-w-7xl mx-auto px-6 py-8 flex-1 w-full">
         <h1 className="text-2xl font-display font-bold mb-1">Rules Engine</h1>
         <p className="text-sm text-muted-foreground mb-8">
           Deterministic policy rules evaluated on every claim before LLM review.
@@ -42,6 +43,7 @@ export default function Rules() {
           </table>
         </div>
       </main>
+      <Footer />
     </div>
   );
 }

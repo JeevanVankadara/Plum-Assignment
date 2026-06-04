@@ -4,6 +4,7 @@ import { TopNav } from "../components/TopNav";
 import { UploadCard } from "../components/UploadCard";
 import { QueueList } from "../components/QueueList";
 import { ClaimDetail } from "../components/ClaimDetail";
+import { Footer } from "../components/Footer";
 import { api, adaptClaimSummary, adaptClaimDetail } from "../lib/api";
 
 export default function Home() {
@@ -60,9 +61,9 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground font-sans">
+    <div className="min-h-screen bg-background text-foreground font-sans flex flex-col">
       <TopNav />
-      <main className="max-w-7xl mx-auto px-6 py-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
+      <main className="max-w-7xl mx-auto px-6 py-8 grid grid-cols-1 lg:grid-cols-12 gap-8 flex-1 w-full">
         <div className="lg:col-span-4 flex flex-col gap-6">
           <UploadCard onSubmit={handleSubmit} busy={busy} />
           {error && (
@@ -84,6 +85,7 @@ export default function Home() {
           )}
         </div>
       </main>
+      <Footer />
     </div>
   );
 }

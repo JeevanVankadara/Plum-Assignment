@@ -91,11 +91,11 @@ export function ClaimDetail({ claim, onDecision }) {
           </p>
         </div>
 
-        <div className="p-6">
+        <div className="p-6 flex flex-col">
           <h3 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-4">
             Adjudication Trail
           </h3>
-          <div className="space-y-5">
+          <div className="space-y-5 max-h-[420px] overflow-y-auto pr-2">
             {claim.rules.map((r) => {
               const isPass = r.state === "pass";
               const isWarn = r.state === "warn";

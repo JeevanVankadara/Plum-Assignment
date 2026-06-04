@@ -1,4 +1,5 @@
 import { TopNav } from "../components/TopNav.jsx";
+import { Footer } from "../components/Footer.jsx";
 
 export default function Analytics() {
   const stats = [
@@ -8,9 +9,9 @@ export default function Analytics() {
     { label: "Pending Review", value: "14", delta: "—" },
   ];
   return (
-    <div className="min-h-screen bg-background text-foreground font-sans">
+    <div className="min-h-screen bg-background text-foreground font-sans flex flex-col">
       <TopNav />
-      <main className="max-w-7xl mx-auto px-6 py-8">
+      <main className="max-w-7xl mx-auto px-6 py-8 flex-1 w-full">
         <h1 className="text-2xl font-display font-bold mb-1">Analytics</h1>
         <p className="text-sm text-muted-foreground mb-8">
           Live operational metrics across the adjudication pipeline.
@@ -30,6 +31,7 @@ export default function Analytics() {
           Charts and decision-mix breakdowns will appear here once live data is wired up.
         </div>
       </main>
+      <Footer />
     </div>
   );
 }
