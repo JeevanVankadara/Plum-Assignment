@@ -71,6 +71,23 @@ function isNonClaimCharge(item) {
   return /gst|cgst|sgst|igst|tax|round\s*off|rounding|service charge/i.test(item.description || '');
 }
 
+function asTextArray(value) {
+  if (!Array.isArray(value)) return [];
+  return value.map(cleanString).filter(Boolean);
+}
+
+function testNamesFromDoc(fields = {}) {
+  return [
+    ...asTextArray(fields.tests_prescribed),
+    ...(Array.isArray(fields.lineItems)
+      ? fields.lineItems
+        .map(normalizeLineItem)
+        .filter(item => item.category === 'diagnostic' && !isNonClaimCharge(item))
+        .map(item => item.description)
+      : []),
+  ];
+}
+
 function fieldText(fields = {}) {
   return [
     fields.diagnosis,
@@ -97,6 +114,13 @@ function mergeExtracted(docs, fallbackMemberId, fallbackSubmissionDate) {
   const lineItems = fields.flatMap(f => Array.isArray(f.lineItems) ? f.lineItems.map(normalizeLineItem).filter(item => !isNonClaimCharge(item)) : []);
   const lineTotal = lineItems.reduce((sum, item) => sum + item.amount, 0);
   const docTotal = fields.reduce((sum, f) => sum + (Number(f.totalAmount) || 0), 0);
+  const prescribedTests = fields
+    .filter(f => normalizeDocType(f.documentType) === 'prescription')
+    .flatMap(testNamesFromDoc);
+  const diagnosticInvoiceTests = fields
+    .filter(f => normalizeDocType(f.documentType) !== 'prescription')
+    .flatMap(testNamesFromDoc);
+  const hasDiagnosticClaim = lineItems.some(item => item.payable !== false && item.category === 'diagnostic');
 
   return {
     memberId: cleanString(fallbackMemberId) || pick('memberId') || 'UNKNOWN',
@@ -110,6 +134,9 @@ function mergeExtracted(docs, fallbackMemberId, fallbackSubmissionDate) {
     diagnosis: pick('diagnosis'),
     department: documentTypes.join(', ') || 'OPD',
     documentTypes,
+    prescribedTests: [...new Set(prescribedTests)],
+    diagnosticInvoiceTests: [...new Set(diagnosticInvoiceTests)],
+    hasDiagnosticClaim,
     preAuthObtained: fields.some(f => f.preAuthObtained === true || f.pre_authorization === true),
     lineItems,
     claimed: lineTotal || docTotal,
@@ -140,6 +167,9 @@ function toDecisionDto(claimDoc) {
     diagnosis: claim.diagnosis,
     lineItems: claim.lineItems || [],
     documentTypes: claim.documentTypes || [],
+    prescribedTests: claim.prescribedTests || [],
+    diagnosticInvoiceTests: claim.diagnosticInvoiceTests || [],
+    hasDiagnosticClaim: claim.hasDiagnosticClaim || false,
     claimed_amount: claim.claimed || 0,
     claimed: claim.claimed || 0,
     decision: claim.decision,

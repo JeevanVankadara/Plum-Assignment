@@ -9,7 +9,15 @@ if (!apiKey) console.warn('GEMINI_API_KEY missing — extraction will fail until
 const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
 
 const EXTRACTION_PROMPT = `You are a medical claim document parser.
-Extract the following fields from the attached document and return STRICT JSON only (no markdown, no commentary):
+Extract the following fields from the attached document and return STRICT JSON only (no markdown, no commentary).
+
+Classify documentType carefully:
+- Use "prescription" for any doctor/clinic prescription, Rx note, dental prescription, treatment plan, or doctor letterhead that contains diagnosis, prescribed medicines, prescribed tests, advised procedures, doctor registration, or doctor's signature/stamp.
+- A prescription remains "prescription" even if it also mentions consultation fee, procedure fee, dental braces fee, treatment charges, or medicine names.
+- Use "bill" only for invoices, receipts, pharmacy cash memos, paid bills, or lab/diagnostic invoices whose main purpose is itemized billing/payment.
+- Use "lab_report" only for actual diagnostic test result reports, not for lab invoices.
+- If both prescription and bill-like content appear, prefer "prescription" when the document is issued by a doctor and contains Rx/diagnosis/treatment advice.
+
 {
   "documentType": "prescription | bill | lab_report | other",
   "patientName": string,

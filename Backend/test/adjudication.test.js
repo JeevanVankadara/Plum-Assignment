@@ -23,6 +23,9 @@ function baseClaim(overrides = {}) {
     documentTypes: ['prescription', 'bill'],
     diagnosis: 'Viral fever',
     evidenceText: 'Viral fever prescription paracetamol CBC test',
+    prescribedTests: [],
+    diagnosticInvoiceTests: [],
+    hasDiagnosticClaim: false,
     preAuthObtained: false,
     lineItems: [
       { description: 'Doctor consultation', amount: 1000, category: 'consultation', payable: true },
@@ -111,6 +114,9 @@ test('rejects MRI without pre-authorization', () => {
   const result = adjudicate({
     claim: baseClaim({
       documentTypes: ['prescription', 'bill', 'lab_report'],
+      prescribedTests: ['MRI Lumbar Spine'],
+      diagnosticInvoiceTests: ['MRI Lumbar Spine'],
+      hasDiagnosticClaim: true,
       lineItems: [
         { description: 'MRI Lumbar Spine', amount: 15000, category: 'diagnostic', payable: true },
       ],
@@ -124,6 +130,113 @@ test('rejects MRI without pre-authorization', () => {
 
   assert.equal(result.decision, 'REJECTED');
   assert.ok(result.rejectionReasons.includes('PRE_AUTH_MISSING'));
+});
+
+test('accepts diagnostic invoice when tests match prescription', () => {
+  const result = adjudicate({
+    claim: baseClaim({
+      prescribedTests: ['CBC'],
+      diagnosticInvoiceTests: ['Complete Blood Count (CBC)'],
+      hasDiagnosticClaim: true,
+      lineItems: [
+        { description: 'Doctor consultation', amount: 500, category: 'consultation', payable: true },
+        { description: 'Complete Blood Count (CBC)', amount: 350, category: 'diagnostic', payable: true },
+      ],
+      claimed: 850,
+      diagnosis: 'Viral fever',
+      evidenceText: 'Viral fever CBC Complete Blood Count',
+    }),
+    extractedDocs: docs(['prescription', 'bill']),
+    llmConfidence: 0.95,
+  });
+
+  assert.equal(result.decision, 'APPROVED');
+  assert.deepEqual(result.rejectionReasons, []);
+});
+
+test('rejects diagnostic bill items when no tests were prescribed', () => {
+  const result = adjudicate({
+    claim: baseClaim({
+      prescribedTests: [],
+      diagnosticInvoiceTests: ['Complete Blood Count (CBC)', 'Liver Function Test'],
+      hasDiagnosticClaim: true,
+      lineItems: [
+        { description: 'Doctor consultation', amount: 500, category: 'consultation', payable: true },
+        { description: 'Complete Blood Count (CBC)', amount: 350, category: 'diagnostic', payable: true },
+        { description: 'Liver Function Test', amount: 650, category: 'diagnostic', payable: true },
+      ],
+      claimed: 1500,
+      evidenceText: 'Viral fever paracetamol azithromycin Complete Blood Count Liver Function Test',
+    }),
+    extractedDocs: docs(['prescription', 'bill']),
+    llmConfidence: 0.95,
+  });
+
+  assert.equal(result.decision, 'PARTIAL');
+  assert.equal(result.approved, 450);
+  assert.ok(result.rejectedItems.some(item => item.includes('diagnostic test not prescribed')));
+});
+
+test('does not require diagnostic evidence when only consultation or pharmacy is claimed', () => {
+  const result = adjudicate({
+    claim: baseClaim({
+      prescribedTests: ['CBC'],
+      diagnosticInvoiceTests: [],
+      hasDiagnosticClaim: false,
+      lineItems: [
+        { description: 'Doctor consultation', amount: 500, category: 'consultation', payable: true },
+        { description: 'Paracetamol tablets', amount: 100, category: 'pharmacy', payable: true },
+      ],
+      claimed: 600,
+      evidenceText: 'Viral fever CBC prescribed paracetamol',
+    }),
+    extractedDocs: docs(['prescription', 'bill']),
+    llmConfidence: 0.95,
+  });
+
+  assert.equal(result.decision, 'APPROVED');
+  assert.deepEqual(result.rejectionReasons, []);
+});
+
+test('rejects diagnostic amount when prescribed test has no invoice or report', () => {
+  const result = adjudicate({
+    claim: baseClaim({
+      prescribedTests: ['CBC'],
+      diagnosticInvoiceTests: [],
+      hasDiagnosticClaim: true,
+      lineItems: [
+        { description: 'CBC charge', amount: 350, category: 'diagnostic', payable: true },
+      ],
+      claimed: 350,
+      evidenceText: 'Viral fever CBC prescribed',
+    }),
+    extractedDocs: docs(['prescription', 'bill']),
+    llmConfidence: 0.95,
+  });
+
+  assert.equal(result.decision, 'REJECTED');
+  assert.ok(result.rejectionReasons.includes('MISSING_DIAGNOSTIC_SUPPORT'));
+});
+
+test('allows sample collection only with a matched prescribed diagnostic test', () => {
+  const result = adjudicate({
+    claim: baseClaim({
+      prescribedTests: ['CBC'],
+      diagnosticInvoiceTests: ['Complete Blood Count (CBC)'],
+      hasDiagnosticClaim: true,
+      lineItems: [
+        { description: 'Complete Blood Count (CBC)', amount: 350, category: 'diagnostic', payable: true },
+        { description: 'Sample Collection Charges', amount: 150, category: 'diagnostic', payable: true },
+      ],
+      claimed: 500,
+      evidenceText: 'Viral fever CBC Complete Blood Count Sample Collection Charges',
+    }),
+    extractedDocs: docs(['prescription', 'bill']),
+    llmConfidence: 0.95,
+  });
+
+  assert.equal(result.decision, 'APPROVED');
+  assert.equal(result.approved, 500);
 });
 
 test('routes low-confidence claims to manual review', () => {
