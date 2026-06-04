@@ -1,6 +1,7 @@
 function statusStyles(status) {
-  if (status === "Auto-Approved") return "text-success bg-success/10";
-  if (status === "Rejected") return "text-error bg-error/10";
+  if (status === "APPROVED") return "text-success bg-success/10";
+  if (status === "REJECTED") return "text-error bg-error/10";
+  if (status === "PARTIAL") return "text-warning bg-warning/10";
   return "text-warning bg-warning/10";
 }
 

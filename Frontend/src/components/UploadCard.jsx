@@ -1,15 +1,28 @@
+// src/components/UploadCard.jsx
 import { useState } from "react";
 
-export function UploadCard({ onSubmit }) {
+export function UploadCard({ onSubmit, busy }) {
   const [memberId, setMemberId] = useState("");
   const [dragOver, setDragOver] = useState(false);
   const [files, setFiles] = useState([]);
 
+  function addFiles(list) {
+    setFiles((prev) => [...prev, ...Array.from(list)]);
+  }
   function handleDrop(e) {
     e.preventDefault();
     setDragOver(false);
-    const names = Array.from(e.dataTransfer.files).map((f) => f.name);
-    setFiles((prev) => [...prev, ...names]);
+    addFiles(e.dataTransfer.files);
+  }
+  function handlePick(e) {
+    addFiles(e.target.files);
+    e.target.value = "";
+  }
+  function submit() {
+    if (!files.length) return;
+    onSubmit?.({ memberId, files });
+    setFiles([]);
+    setMemberId("");
   }
 
   return (
@@ -17,21 +30,28 @@ export function UploadCard({ onSubmit }) {
       <h2 className="font-display text-sm font-bold uppercase tracking-wider text-muted-foreground mb-4">
         New Adjudication
       </h2>
+
       <div
-        onDragOver={(e) => {
-          e.preventDefault();
-          setDragOver(true);
-        }}
+        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
         onDragLeave={() => setDragOver(false)}
         onDrop={handleDrop}
+        onClick={() => document.getElementById("claim-file-input")?.click()}
         className={`border-2 border-dashed rounded-lg p-8 flex flex-col items-center justify-center text-center transition-colors cursor-pointer group ${
           dragOver ? "border-accent/40 bg-accent/5" : "border-border hover:border-accent/20"
         }`}
       >
+        <input
+          id="claim-file-input"
+          type="file"
+          multiple
+          accept="application/pdf,image/png,image/jpeg"
+          className="hidden"
+          onChange={handlePick}
+        />
         <div className="size-10 bg-accent/5 rounded-full flex items-center justify-center mb-3 group-hover:bg-accent/10 transition-colors">
-          <div className="size-4 border-2 border-accent border-t-transparent rounded-full animate-spin [animation-duration:2s]"></div>
+          <div className="size-4 border-2 border-accent border-t-transparent rounded-full animate-spin [animation-duration:2s]" />
         </div>
-        <p className="text-sm font-medium text-foreground">Drop claim documents here</p>
+        <p className="text-sm font-medium text-foreground">Drop or click to add claim documents</p>
         <p className="text-xs text-muted-foreground mt-1">Prescription, Bills, Lab Reports (PDF/JPG)</p>
       </div>
 
@@ -39,7 +59,7 @@ export function UploadCard({ onSubmit }) {
         <ul className="mt-3 space-y-1.5">
           {files.map((f, i) => (
             <li key={i} className="text-xs font-mono text-muted-foreground flex justify-between bg-background border border-border rounded px-2 py-1">
-              <span className="truncate">{f}</span>
+              <span className="truncate">{f.name}</span>
               <span className="text-success">queued</span>
             </li>
           ))}
@@ -60,10 +80,11 @@ export function UploadCard({ onSubmit }) {
           />
         </div>
         <button
-          onClick={() => onSubmit?.(memberId)}
-          className="w-full bg-accent text-accent-foreground py-2.5 rounded-md text-sm font-semibold hover:bg-accent/90 transition-all"
+          onClick={submit}
+          disabled={busy || !files.length}
+          className="w-full bg-accent text-accent-foreground py-2.5 rounded-md text-sm font-semibold hover:bg-accent/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          Process Claim
+          {busy ? "Processing…" : "Process Claim"}
         </button>
       </div>
     </section>

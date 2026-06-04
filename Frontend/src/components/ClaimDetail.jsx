@@ -1,7 +1,7 @@
 function statusBadge(status) {
-  if (status === "Auto-Approved")
+  if (status === "APPROVED")
     return "bg-success/10 text-success ring-success/20";
-  if (status === "Rejected") return "bg-error/10 text-error ring-error/20";
+  if (status === "REJECTED") return "bg-error/10 text-error ring-error/20";
   return "bg-warning/10 text-warning ring-warning/20";
 }
 
@@ -18,7 +18,7 @@ export function ClaimDetail({ claim, onDecision }) {
         <div>
           <div className="flex items-center gap-3 mb-1">
             <h1 className="text-xl font-display font-bold text-foreground">
-              Claim #{claim.id}
+              Claim #{claim.claimNo || claim.id}
             </h1>
             <span
               className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ring-1 ${statusBadge(

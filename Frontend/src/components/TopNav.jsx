@@ -7,7 +7,7 @@ export function TopNav() {
     <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-border px-6 h-14 flex items-center justify-between font-sans">
       <div className="flex items-center gap-8">
         <span className="font-display text-lg tracking-tight font-bold text-accent">
-          CURA<span className="font-normal opacity-50">LOGIC</span>
+          PLUM<span className="font-normal opacity-50">CLAIMS</span>
         </span>
         <div className="flex gap-6 text-sm font-medium text-muted-foreground">
           <NavLink to="/" end className={({ isActive }) => (isActive ? active : base)}>

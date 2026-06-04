@@ -6,12 +6,19 @@ const HARD_FAIL_STEPS = new Set(['eligibility', 'documents', 'coverage', 'medica
 const MANUAL_REVIEW_THRESHOLD = 25000;
 const MANUAL_REVIEW_CONFIDENCE = 0.7;
 
-export function adjudicate({ claim, extractedDocs, llmConfidence = 0.9 }) {
+export function adjudicate({ claim, extractedDocs, llmConfidence = 0.9, previousClaims = [] }) {
   const policy = getPolicy();
-  const { trail, financials } = runAllRules({ claim, extractedDocs, policy });
+  const { trail, financials } = runAllRules({ claim, extractedDocs, policy, previousClaims });
 
   const hardFails = trail.filter(t => t.status === 'fail' && HARD_FAIL_STEPS.has(t.step));
   const warns = trail.filter(t => t.status === 'warn');
+  const fraudFlags = trail
+    .filter(t => t.evidence?.fraudFlag)
+    .map(t => t.detail);
+  const rejectedItems = [
+    ...financials.rejectedItems,
+    ...trail.flatMap(t => t.evidence?.rejectedItems || []),
+  ];
   const confidence = aggregateConfidence(trail, llmConfidence);
 
   let decision = 'APPROVED';
@@ -20,11 +27,11 @@ export function adjudicate({ claim, extractedDocs, llmConfidence = 0.9 }) {
   if (hardFails.length) {
     decision = 'REJECTED';
     approved = 0;
-  } else if (warns.length && financials.approved < claim.claimed) {
+  } else if (financials.deductions > 0) {
     decision = 'PARTIAL';
   }
 
-  if (claim.claimed > MANUAL_REVIEW_THRESHOLD || confidence < MANUAL_REVIEW_CONFIDENCE) {
+  if (!hardFails.length && (claim.claimed > MANUAL_REVIEW_THRESHOLD || confidence < MANUAL_REVIEW_CONFIDENCE || fraudFlags.length)) {
     decision = 'MANUAL_REVIEW';
   }
 
@@ -35,7 +42,13 @@ export function adjudicate({ claim, extractedDocs, llmConfidence = 0.9 }) {
     copay: financials.copay,
     confidence,
     rejectionReasons: hardFails.map(f => f.ruleId),
-    notes: warns.length ? `${warns.length} warning(s) raised during adjudication` : 'Clean run',
+    rejectedItems: [...new Set(rejectedItems)].filter(Boolean),
+    fraudFlags: [...new Set(fraudFlags)].filter(Boolean),
+    notes: hardFails.length
+      ? `Rejected due to: ${hardFails.map(f => f.ruleId).join(', ')}`
+      : warns.length
+      ? `${warns.length} warning(s) raised during adjudication`
+      : 'Clean run',
     nextSteps: decision === 'APPROVED'
       ? 'Payment will be processed within 3 business days.'
       : decision === 'REJECTED'

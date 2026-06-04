@@ -19,13 +19,51 @@ Extract the following fields from the attached document and return STRICT JSON o
   "doctorRegNo": string | null,
   "provider": string | null,
   "serviceDate": "YYYY-MM-DD" | null,
+  "submissionDate": "YYYY-MM-DD" | null,
   "diagnosis": string | null,
   "prescription": [string],
+  "procedures": [string],
+  "tests_prescribed": [string],
+  "treatment": string | null,
+  "preAuthObtained": boolean,
   "lineItems": [{ "description": string, "amount": number, "category": "consultation|pharmacy|diagnostic|dental|vision|alternative|other" }],
   "totalAmount": number,
   "legibilityScore": number  // 0..1
 }
-If a field is unknown return null or empty array. Use Indian Rupee numeric values only.`;
+If a field is unknown return null or empty array. Use Indian Rupee numeric values only.
+Do not include GST, CGST, SGST, IGST, tax, round-off, or service-charge rows in lineItems.`;
+
+function logGeminiExtraction(file, parsed, rawText) {
+  const summary = {
+    file: file.originalname || file.filename,
+    documentType: parsed.documentType,
+    patientName: parsed.patientName,
+    age: parsed.age,
+    memberId: parsed.memberId,
+    doctorName: parsed.doctorName,
+    doctorRegNo: parsed.doctorRegNo,
+    provider: parsed.provider,
+    serviceDate: parsed.serviceDate,
+    submissionDate: parsed.submissionDate,
+    diagnosis: parsed.diagnosis,
+    treatment: parsed.treatment,
+    prescription: parsed.prescription,
+    procedures: parsed.procedures,
+    tests_prescribed: parsed.tests_prescribed,
+    preAuthObtained: parsed.preAuthObtained,
+    lineItems: parsed.lineItems,
+    totalAmount: parsed.totalAmount,
+    legibilityScore: parsed.legibilityScore,
+    parseError: parsed._parseError || false,
+  };
+
+  console.log('\n[Gemini extraction result]');
+  console.log(JSON.stringify(summary, null, 2));
+  if (parsed._parseError) {
+    console.log('[Gemini raw response - parse failed]');
+    console.log(rawText);
+  }
+}
 
 export async function extractFromDocument(file) {
   if (!genAI) throw new Error('Gemini not configured');
@@ -47,6 +85,8 @@ export async function extractFromDocument(file) {
   } catch {
     parsed = { documentType: 'other', lineItems: [], totalAmount: 0, legibilityScore: 0.3, _parseError: true };
   }
+
+  logGeminiExtraction(file, parsed, text);
 
   return { parsed, raw: text };
 }

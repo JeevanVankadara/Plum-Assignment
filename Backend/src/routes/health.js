@@ -1,6 +1,6 @@
 import { Router } from "express";
 const router = Router();
 router.get("/", (req, res) => {
-  console.log('Server is running fine');
+  res.json({ ok: true, service: 'curalogic-backend' });
 })
 export default router;
