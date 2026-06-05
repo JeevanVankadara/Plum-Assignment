@@ -8,6 +8,13 @@ const lineItemSchema = new mongoose.Schema({
   rejectionReason: String,
 }, { _id: false });
 
+const irrelevantTestSchema = new mongoose.Schema({
+  testName: String,
+  amount: Number,
+  reason: String,
+  excluded: { type: Boolean, default: true },
+}, { _id: false });
+
 const claimSchema = new mongoose.Schema({
   claimId: { type: String, unique: true, index: true },
   memberId: String,
@@ -18,11 +25,13 @@ const claimSchema = new mongoose.Schema({
   docRegNo: String,
   department: String,
   diagnosis: String,
+  exclusionMatch: String,
   serviceDate: String,
   submissionDate: String,
   documentTypes: [String],
   prescribedTests: [String],
   diagnosticInvoiceTests: [String],
+  irrelevantTests: [irrelevantTestSchema],
   hasDiagnosticClaim: { type: Boolean, default: false },
   preAuthObtained: { type: Boolean, default: false },
   lineItems: [lineItemSchema],

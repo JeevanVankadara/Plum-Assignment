@@ -1,3 +1,6 @@
+import { useEffect, useMemo, useState } from "react";
+import { IrrelevantItemsReview, irrelevantItemKey } from "./IrrelevantItemsReview";
+
 function statusBadge(status) {
   if (status === "APPROVED")
     return "bg-success/10 text-success ring-success/20";
@@ -11,7 +14,58 @@ function confidenceColor(c) {
   return "bg-error";
 }
 
+function valueOrDash(value) {
+  return value && value !== "Unknown provider" ? value : "-";
+}
+
+function money(value) {
+  return `₹${(Number(value) || 0).toLocaleString("en-IN")}.00`;
+}
+
 export function ClaimDetail({ claim, onDecision }) {
+  const providerName = valueOrDash(claim.provider).split(",")[0];
+  const doctorLine = `${valueOrDash(claim.doctor)}${
+    claim.docRegNo && claim.docRegNo !== "-" ? ` - Reg: ${claim.docRegNo}` : ""
+  }`;
+  const irrelevantTests = claim.irrelevantTests || [];
+  const [excludedMap, setExcludedMap] = useState({});
+
+  useEffect(() => {
+    setExcludedMap(
+      Object.fromEntries(
+        irrelevantTests.map((item, index) => [
+          irrelevantItemKey(item, index),
+          item.excluded !== false,
+        ])
+      )
+    );
+  }, [irrelevantTests]);
+
+  const reviewTotals = useMemo(() => {
+    const delta = irrelevantTests.reduce((sum, item, index) => {
+      const key = irrelevantItemKey(item, index);
+      const amount = Number(item.amount) || 0;
+      const initiallyExcluded = item.excluded !== false;
+      const currentlyExcluded = excludedMap[key] !== false;
+      if (initiallyExcluded && !currentlyExcluded) return sum + amount;
+      if (!initiallyExcluded && currentlyExcluded) return sum - amount;
+      return sum;
+    }, 0);
+    const maxApproved = Math.max(0, claim.claimed - claim.copay);
+    const approved = Math.min(maxApproved, Math.max(0, claim.approved + delta));
+    return {
+      approved,
+      deductions: Math.max(0, claim.deductions - delta),
+    };
+  }, [claim.approved, claim.claimed, claim.copay, claim.deductions, excludedMap, irrelevantTests]);
+
+  const irrelevantOverrides = irrelevantTests.map((item, index) => ({
+    testName: item.testName,
+    amount: Number(item.amount) || 0,
+    excluded: excludedMap[irrelevantItemKey(item, index)] !== false,
+  }));
+  const hasIrrelevantReview = irrelevantTests.length > 0;
+
   return (
     <div className="bg-white rounded-xl border border-border overflow-hidden shadow-md font-sans">
       <div className="p-6 border-b border-border flex justify-between items-start bg-white">
@@ -59,10 +113,10 @@ export function ClaimDetail({ claim, onDecision }) {
           <div className="w-full aspect-[3/4] bg-white border border-border shadow-sm rounded relative overflow-hidden">
             <div className="absolute top-6 left-6 right-6 h-10 border-b border-dashed border-border flex items-center justify-between">
               <span className="font-display font-bold text-sm text-accent">
-                {claim.provider.split(",")[0]}
+                {providerName}
               </span>
               <span className="text-[9px] text-muted-foreground font-mono">
-                {claim.serviceDate}
+                {valueOrDash(claim.serviceDate)}
               </span>
             </div>
             <div className="absolute top-20 left-6 right-6 space-y-2">
@@ -71,23 +125,23 @@ export function ClaimDetail({ claim, onDecision }) {
             </div>
             <div className="absolute top-[36%] left-6 right-6 h-8 border-2 border-warning/50 bg-warning/5 rounded flex items-center px-2">
               <span className="text-[9px] font-mono text-warning font-bold">
-                Rx: highlighted line
+                Patient: {valueOrDash(claim.patient)}
               </span>
             </div>
             <div className="absolute top-[52%] left-10 w-1/2 h-6 border-2 border-success/50 bg-success/5 rounded flex items-center px-2">
-              <span className="text-[9px] font-mono text-success font-bold">
-                Doctor stamp
+              <span className="text-[9px] font-mono text-success font-bold truncate">
+                {doctorLine}
               </span>
             </div>
             <div className="absolute bottom-4 right-4 text-[9px] font-mono text-muted-foreground">
-              Reg: {claim.docRegNo}
+              Reg: {valueOrDash(claim.docRegNo)}
             </div>
           </div>
           <p className="text-[11px] text-muted-foreground mt-3 leading-relaxed">
             <span className="font-mono font-semibold text-foreground">
               {claim.doctor}
             </span>{" "}
-            • {claim.department}. Source document extracted via OCR pipeline.
+            • {claim.department}.
           </p>
         </div>
 
@@ -137,46 +191,63 @@ export function ClaimDetail({ claim, onDecision }) {
           </div>
 
           <div className="mt-8 pt-6 border-t border-border">
+            <IrrelevantItemsReview
+              items={irrelevantTests}
+              excludedMap={excludedMap}
+              onToggle={(key) =>
+                setExcludedMap((current) => ({
+                  ...current,
+                  [key]: !(current[key] !== false),
+                }))
+              }
+            />
+
             <div className="flex justify-between py-1 text-xs">
               <span className="text-muted-foreground">Claimed Amount</span>
-              <span className="font-mono text-foreground">
-                ₹{claim.claimed.toLocaleString("en-IN")}.00
-              </span>
+              <span className="font-mono text-foreground">{money(claim.claimed)}</span>
             </div>
             <div className="flex justify-between py-1 text-xs">
               <span className="text-muted-foreground">System Deductions</span>
-              <span className="font-mono text-error">
-                -₹{claim.deductions.toLocaleString("en-IN")}.00
-              </span>
+              <span className="font-mono text-error">-{money(reviewTotals.deductions)}</span>
             </div>
             <div className="flex justify-between py-1 text-xs">
               <span className="text-muted-foreground">Copay</span>
-              <span className="font-mono text-error">
-                -₹{claim.copay.toLocaleString("en-IN")}.00
-              </span>
+              <span className="font-mono text-error">-{money(claim.copay)}</span>
             </div>
             <div className="flex justify-between pt-4 mt-2 border-t border-border">
               <span className="font-bold text-sm uppercase text-foreground">
                 Approved Amount
               </span>
               <span className="font-mono font-bold text-lg text-success">
-                ₹{claim.approved.toLocaleString("en-IN")}.00
+                {money(reviewTotals.approved)}
               </span>
             </div>
           </div>
 
           <div className="flex gap-2 mt-6">
             <button
-              onClick={() => onDecision(claim.id, "Rejected")}
+              onClick={() => onDecision(claim.id, "REJECTED", {
+                approved: 0,
+                deductions: claim.claimed,
+                irrelevantTestOverrides: irrelevantOverrides,
+                notes: "Manual reviewer rejected the claim.",
+              })}
               className="flex-1 bg-white border border-border py-2 rounded text-xs font-bold text-foreground hover:bg-background transition-colors"
             >
               Reject Claim
             </button>
             <button
-              onClick={() => onDecision(claim.id, "Approved")}
+              onClick={() => onDecision(claim.id, "APPROVED", {
+                approved: reviewTotals.approved,
+                deductions: reviewTotals.deductions,
+                irrelevantTestOverrides: irrelevantOverrides,
+                notes: hasIrrelevantReview
+                  ? "Manual reviewer approved the reviewed amount after irrelevant-test toggle review."
+                  : "Manual reviewer approved the claim.",
+              })}
               className="flex-1 bg-accent text-accent-foreground py-2 rounded text-xs font-bold hover:bg-accent/90 transition-all shadow-lg shadow-accent/10"
             >
-              Approve Final
+              {hasIrrelevantReview ? "Approve Reviewed Amount" : "Approve Final"}
             </button>
           </div>
         </div>

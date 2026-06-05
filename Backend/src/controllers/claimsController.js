@@ -100,6 +100,62 @@ function fieldText(fields = {}) {
   ].filter(Boolean).join(' ');
 }
 
+const POLICY_EXCLUSIONS = new Set([
+  'Cosmetic procedures',
+  'Weight loss treatments',
+  'Infertility treatments',
+  'Experimental treatments',
+  'Self-inflicted injuries',
+  'Adventure sports injuries',
+  'War and nuclear risks',
+  'HIV/AIDS treatment',
+  'Alcoholism/drug abuse treatment',
+  'Non-allopathic treatments (except listed)',
+  'Vitamins and supplements (unless prescribed for deficiency)',
+]);
+
+function normalizeExclusion(value) {
+  const clean = cleanString(value);
+  return POLICY_EXCLUSIONS.has(clean) ? clean : null;
+}
+
+function normalizeIrrelevantTest(item = {}) {
+  const testName = cleanString(item.testName || item.description || item.name || item.test);
+  if (!testName) return null;
+  return {
+    testName,
+    amount: Number(item.amount ?? item.cost ?? item.price ?? 0) || 0,
+    reason: cleanString(item.reason) || 'Diagnostic test may not align with the diagnosis',
+    excluded: item.excluded !== false,
+  };
+}
+
+function normalizedText(value = '') {
+  return String(value).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+function alreadyFlagged(test, existing) {
+  const name = normalizedText(test.testName);
+  return existing.some(item => normalizedText(item.testName) === name || name.includes(normalizedText(item.testName)) || normalizedText(item.testName).includes(name));
+}
+
+function deriveIrrelevantTests(diagnosis, lineItems, existing = []) {
+  const diagnosisText = normalizedText(diagnosis);
+  const simpleFever = /\b(fever|viral fever|throat infection|cold|cough)\b/.test(diagnosisText);
+  const complicationContext = /\b(injury|trauma|fracture|seizure|stroke|neurological|brain|spine|lumbar|chest pain|abdominal pain|severe headache)\b/.test(diagnosisText);
+  if (!simpleFever || complicationContext) return [];
+
+  return (lineItems || [])
+    .filter(item => item.category === 'diagnostic' && /\b(mri|ct scan|ct)\b/i.test(item.description || ''))
+    .map(item => ({
+      testName: item.description,
+      amount: Number(item.amount) || 0,
+      reason: 'High-end MRI/CT scan does not align with a simple fever/throat infection diagnosis without complication symptoms',
+      excluded: true,
+    }))
+    .filter(test => !alreadyFlagged(test, existing));
+}
+
 function mergeExtracted(docs, fallbackMemberId, fallbackSubmissionDate) {
   const fields = docs.map(d => d.extractedFields || {});
   const pick = (...keys) => {
@@ -121,6 +177,16 @@ function mergeExtracted(docs, fallbackMemberId, fallbackSubmissionDate) {
     .filter(f => normalizeDocType(f.documentType) !== 'prescription')
     .flatMap(testNamesFromDoc);
   const hasDiagnosticClaim = lineItems.some(item => item.payable !== false && item.category === 'diagnostic');
+  const exclusionMatch = fields.map(f => normalizeExclusion(f.exclusionMatch)).find(Boolean) || null;
+  const diagnosis = pick('diagnosis');
+  const extractedIrrelevantTests = fields
+    .flatMap(f => Array.isArray(f.irrelevantTests) ? f.irrelevantTests : [])
+    .map(normalizeIrrelevantTest)
+    .filter(Boolean);
+  const irrelevantTests = [
+    ...extractedIrrelevantTests,
+    ...deriveIrrelevantTests(diagnosis, lineItems, extractedIrrelevantTests),
+  ];
 
   return {
     memberId: cleanString(fallbackMemberId) || pick('memberId') || 'UNKNOWN',
@@ -131,11 +197,13 @@ function mergeExtracted(docs, fallbackMemberId, fallbackSubmissionDate) {
     provider: pick('provider', 'hospital', 'clinic'),
     serviceDate: pick('serviceDate', 'treatmentDate', 'treatment_date'),
     submissionDate: cleanString(fallbackSubmissionDate) || pick('submissionDate', 'submittedDate'),
-    diagnosis: pick('diagnosis'),
+    diagnosis,
+    exclusionMatch,
     department: documentTypes.join(', ') || 'OPD',
     documentTypes,
     prescribedTests: [...new Set(prescribedTests)],
     diagnosticInvoiceTests: [...new Set(diagnosticInvoiceTests)],
+    irrelevantTests,
     hasDiagnosticClaim,
     preAuthObtained: fields.some(f => f.preAuthObtained === true || f.pre_authorization === true),
     lineItems,
@@ -165,10 +233,13 @@ function toDecisionDto(claimDoc) {
     submissionDate: claim.submissionDate,
     department: claim.department,
     diagnosis: claim.diagnosis,
+    exclusionMatch: claim.exclusionMatch,
     lineItems: claim.lineItems || [],
     documentTypes: claim.documentTypes || [],
     prescribedTests: claim.prescribedTests || [],
     diagnosticInvoiceTests: claim.diagnosticInvoiceTests || [],
+    irrelevant_tests: claim.irrelevantTests || [],
+    irrelevantTests: claim.irrelevantTests || [],
     hasDiagnosticClaim: claim.hasDiagnosticClaim || false,
     claimed_amount: claim.claimed || 0,
     claimed: claim.claimed || 0,
@@ -287,12 +358,27 @@ export async function getClaim(req, res, next) {
 
 export async function overrideDecision(req, res, next) {
   try {
-    const { decision, reason, notes } = req.body;
+    const { decision, reason, notes, approved, deductions, irrelevantTestOverrides } = req.body;
     const claim = await Claim.findById(req.params.id);
     if (!claim) return res.status(404).json({ error: 'Claim not found' });
 
     claim.decision = decision;
-    if (decision === 'REJECTED') claim.approved = 0;
+    if (Array.isArray(irrelevantTestOverrides)) {
+      claim.irrelevantTests = (claim.irrelevantTests || []).map(test => {
+        const current = typeof test.toObject === 'function' ? test.toObject() : test;
+        const override = irrelevantTestOverrides.find(item =>
+          normalizedText(item.testName) === normalizedText(current.testName)
+          && Number(item.amount || 0) === Number(current.amount || 0)
+        );
+        return override ? { ...current, excluded: override.excluded !== false } : current;
+      });
+    }
+    if (decision === 'REJECTED') {
+      claim.approved = 0;
+    } else if (approved !== undefined) {
+      claim.approved = Math.max(0, Number(approved) || 0);
+    }
+    if (deductions !== undefined) claim.deductions = Math.max(0, Number(deductions) || 0);
     await claim.save();
 
     const trail = await AuditTrail.create({

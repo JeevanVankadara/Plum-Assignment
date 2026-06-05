@@ -23,7 +23,7 @@ export function TopNav() {
       </div>
       <div className="flex items-center gap-4">
         <div className="h-8 w-8 rounded-full bg-accent/5 flex items-center justify-center border border-accent/10">
-          <span className="text-[10px] font-bold text-accent">AS</span>
+          <span className="text-[10px] font-bold text-accent">JV</span>
         </div>
       </div>
     </nav>

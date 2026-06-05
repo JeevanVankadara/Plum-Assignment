@@ -7,60 +7,36 @@ const CATEGORY_TO_POLICY_KEY = {
   alternative: 'alternative_medicine',
 };
 
-function textForClaim(claim) {
-  return [
-    claim.diagnosis,
-    claim.evidenceText,
-    ...(claim.lineItems || []).map(li => li.description),
-  ].filter(Boolean).join(' ').toLowerCase();
+function exactPolicyExclusion(claim, policy) {
+  const exclusions = new Set(policy.exclusions || []);
+  const match = typeof claim.exclusionMatch === 'string' ? claim.exclusionMatch.trim() : null;
+  return exclusions.has(match) ? match : null;
 }
 
-function exclusionMatch(text) {
-  const checks = [
-    { label: 'Cosmetic procedures', re: /cosmetic|botox|filler|liposuction|whitening|aesthetic/ },
-    { label: 'Weight loss treatments', re: /weight loss|obesity|bariatric|slimming|diet plan/ },
-    { label: 'Infertility treatments', re: /infertility|ivf|fertility/ },
-    { label: 'Experimental treatments', re: /experimental|trial drug|unproven/ },
-    { label: 'Self-inflicted injuries', re: /self[- ]inflicted/ },
-    { label: 'Alcoholism/drug abuse treatment', re: /alcoholism|drug abuse|substance abuse/ },
-    { label: 'HIV/AIDS treatment', re: /\bhiv\b|aids/ },
-    { label: 'Non-allopathic treatments (except listed)', re: /naturopathy|acupuncture|reiki/ },
-  ];
-  return checks.find(check => check.re.test(text));
-}
-
-function markExcludedItems(claim) {
+function markExcludedItems(claim, exclusion) {
+  if (!exclusion) return [];
   const rejected = [];
   for (const item of claim.lineItems || []) {
-    const text = `${item.description || ''} ${claim.diagnosis || ''}`.toLowerCase();
-    const match = exclusionMatch(text);
-    if (match) {
-      item.payable = false;
-      item.rejectionReason = match.label;
-      rejected.push(`${item.description} - ${match.label}`);
-    }
+    item.payable = false;
+    item.rejectionReason = exclusion;
+    rejected.push(`${item.description} - ${exclusion}`);
   }
   return rejected;
 }
 
 export function runCoverage({ claim, policy }) {
   const trail = [];
-  const claimText = textForClaim(claim);
-  const rejectedItems = markExcludedItems(claim);
-  const claimLevelExclusion = exclusionMatch(claimText);
+  const exclusion = exactPolicyExclusion(claim, policy);
+  const rejectedItems = markExcludedItems(claim, exclusion);
   const hasPayableItem = (claim.lineItems || []).some(item => item.payable !== false);
 
   trail.push({
     step: 'coverage',
     ruleId: 'EXCLUDED_CONDITION',
     label: 'Not in exclusion list',
-    status: claimLevelExclusion && !hasPayableItem ? 'fail' : rejectedItems.length ? 'warn' : 'pass',
-    detail: claimLevelExclusion
-      ? rejectedItems.length && hasPayableItem
-        ? `Excluded item(s) removed: ${rejectedItems.join('; ')}`
-        : `Condition matches exclusion: ${claimLevelExclusion.label}`
-      : 'No matching exclusion',
-    evidence: { rejectedItems },
+    status: exclusion && !hasPayableItem ? 'fail' : exclusion ? 'warn' : 'pass',
+    detail: exclusion ? `Condition matches exclusion: ${exclusion}` : 'No matching exclusion',
+    evidence: { exclusionMatch: exclusion, rejectedItems },
   });
 
   const categories = new Set((claim.lineItems || []).filter(li => li.payable !== false).map(li => li.category));

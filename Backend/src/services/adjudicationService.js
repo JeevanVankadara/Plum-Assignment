@@ -15,6 +15,9 @@ export function adjudicate({ claim, extractedDocs, llmConfidence = 0.9, previous
   const fraudFlags = trail
     .filter(t => t.evidence?.fraudFlag)
     .map(t => t.detail);
+  const manualReviewFlags = trail
+    .filter(t => t.evidence?.manualReview)
+    .map(t => t.detail);
   const rejectedItems = [
     ...financials.rejectedItems,
     ...trail.flatMap(t => t.evidence?.rejectedItems || []),
@@ -31,7 +34,7 @@ export function adjudicate({ claim, extractedDocs, llmConfidence = 0.9, previous
     decision = 'PARTIAL';
   }
 
-  if (!hardFails.length && (claim.claimed > MANUAL_REVIEW_THRESHOLD || confidence < MANUAL_REVIEW_CONFIDENCE || fraudFlags.length)) {
+  if (!hardFails.length && (claim.claimed > MANUAL_REVIEW_THRESHOLD || confidence < MANUAL_REVIEW_CONFIDENCE || fraudFlags.length || manualReviewFlags.length)) {
     decision = 'MANUAL_REVIEW';
   }
 
@@ -43,7 +46,7 @@ export function adjudicate({ claim, extractedDocs, llmConfidence = 0.9, previous
     confidence,
     rejectionReasons: hardFails.map(f => f.ruleId),
     rejectedItems: [...new Set(rejectedItems)].filter(Boolean),
-    fraudFlags: [...new Set(fraudFlags)].filter(Boolean),
+    fraudFlags: [...new Set([...fraudFlags, ...manualReviewFlags])].filter(Boolean),
     notes: hardFails.length
       ? `Rejected due to: ${hardFails.map(f => f.ruleId).join(', ')}`
       : warns.length

@@ -47,6 +47,14 @@ MONGO_URI=mongodb+srv://<user>:<pass>@cluster.xxx.mongodb.net/curalogic
 }
 ```
 
+## Assumptions
+
+- Policy active status is checked using `policy_terms.json` `effective_date` only. The policy file does not provide an expiry/end date, so the backend verifies that treatment happened after the policy started, but it cannot verify whether the policy later expired.
+- Waiting periods are calculated from the policy `effective_date`. The policy file does not provide employee/member enrollment dates.
+- Member verification does not use a member/dependent database or roster. The backend only checks whether a member ID is present in the uploaded photo/PDF or submitted form data. If no member ID is found, the claim is rejected as `MEMBER_NOT_COVERED`; if an ID is present, the system assumes it belongs to a covered employee/dependent because no roster data is maintained.
+- `network_hospitals` in `policy_terms.json` is treated only as the insurer's network/tie-up provider list. It is not a hospital/clinic legal registration database, so the backend cannot verify whether a provider is officially registered with a government, medical, NABH, NABL, or clinic licensing authority.
+- Pre-authorization checking is implemented only for MRI/CT diagnostic items because `policy_terms.json` lists `MRI (with pre-auth)` and `CT Scan (with pre-auth)` as special covered tests. The backend does not dynamically parse every possible future `pre_authorization_required` policy rule; if new pre-auth services are added, the rule logic must be updated.
+
 ## Folder layout
 
 ```

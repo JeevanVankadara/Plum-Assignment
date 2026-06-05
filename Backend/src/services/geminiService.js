@@ -18,6 +18,29 @@ Classify documentType carefully:
 - Use "lab_report" only for actual diagnostic test result reports, not for lab invoices.
 - If both prescription and bill-like content appear, prefer "prescription" when the document is issued by a doctor and contains Rx/diagnosis/treatment advice.
 
+Classify policy exclusions exactly:
+- If the diagnosis, prescribed treatment, procedure, or medicines clearly fall under a policy exclusion, set "exclusionMatch" to exactly one of these strings:
+  "Cosmetic procedures",
+  "Weight loss treatments",
+  "Infertility treatments",
+  "Experimental treatments",
+  "Self-inflicted injuries",
+  "Adventure sports injuries",
+  "War and nuclear risks",
+  "HIV/AIDS treatment",
+  "Alcoholism/drug abuse treatment",
+  "Non-allopathic treatments (except listed)",
+  "Vitamins and supplements (unless prescribed for deficiency)"
+- If no exclusion applies, set "exclusionMatch" to null.
+- Do not invent new exclusion labels. Use only the exact strings above or null.
+
+Check diagnostic test relevance:
+- Be particular about whether diagnostic tests align with the patient's diagnosis/problem.
+- If a diagnostic test in the bill/invoice is not medically aligned with the diagnosis/problem, add it to "irrelevantTests".
+- Include the test name and amount exactly as shown in the invoice/bill when available.
+- Example: MRI or CT Scan for simple viral fever, mild throat infection, or routine fever without injury/neurological/back/abdominal/chest symptoms should be marked irrelevant.
+- If the document does not contain enough diagnosis/problem context to judge relevance, keep "irrelevantTests" empty for that document.
+
 {
   "documentType": "prescription | bill | lab_report | other",
   "patientName": string,
@@ -33,6 +56,8 @@ Classify documentType carefully:
   "procedures": [string],
   "tests_prescribed": [string],
   "treatment": string | null,
+  "exclusionMatch": string | null,
+  "irrelevantTests": [{ "testName": string, "amount": number, "reason": string }],
   "preAuthObtained": boolean,
   "lineItems": [{ "description": string, "amount": number, "category": "consultation|pharmacy|diagnostic|dental|vision|alternative|other" }],
   "totalAmount": number,
@@ -59,6 +84,8 @@ function logGeminiExtraction(file, parsed, rawText) {
     procedures: parsed.procedures,
     tests_prescribed: parsed.tests_prescribed,
     preAuthObtained: parsed.preAuthObtained,
+    exclusionMatch: parsed.exclusionMatch,
+    irrelevantTests: parsed.irrelevantTests,
     lineItems: parsed.lineItems,
     totalAmount: parsed.totalAmount,
     legibilityScore: parsed.legibilityScore,

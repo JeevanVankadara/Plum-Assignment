@@ -6,6 +6,25 @@ function claimText(claim) {
   ].filter(Boolean).join(' ').toLowerCase();
 }
 
+function normalize(value = '') {
+  return String(value).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+function words(value = '') {
+  return normalize(value).split(/\s+/).filter(Boolean);
+}
+
+function testsMatch(a, b) {
+  const aText = normalize(a);
+  const bText = normalize(b);
+  if (!aText || !bText) return false;
+  if (aText.includes(bText) || bText.includes(aText)) return true;
+  const aWords = new Set(words(aText));
+  const bWords = new Set(words(bText));
+  const shared = [...aWords].filter(word => bWords.has(word));
+  return shared.length > 0 && shared.length >= Math.min(aWords.size, bWords.size, 2);
+}
+
 function categorySupported(category, text) {
   if (category === 'consultation') return true;
   if (category === 'pharmacy') return /fever|infection|pain|migraine|bronchitis|diabetes|hypertension|gastro|deficiency|prescri|medicine|tablet|capsule/.test(text);
@@ -14,6 +33,41 @@ function categorySupported(category, text) {
   if (category === 'vision') return /eye|vision|glasses|lens|sight/.test(text);
   if (category === 'alternative') return /ayurveda|homeopathy|unani|pain|therapy|panchakarma/.test(text);
   return false;
+}
+
+export function runIrrelevantDiagnostics({ claim }) {
+  const irrelevantTests = claim.irrelevantTests || [];
+  const rejectedItems = [];
+
+  for (const test of irrelevantTests) {
+    const matchedItem = (claim.lineItems || []).find(item =>
+      item.category === 'diagnostic'
+      && item.payable !== false
+      && (testsMatch(item.description, test.testName)
+        || (Number(test.amount) > 0 && Number(item.amount) === Number(test.amount)))
+    );
+
+    if (!matchedItem) continue;
+    matchedItem.payable = false;
+    matchedItem.rejectionReason = 'Irrelevant to diagnosis';
+    test.excluded = true;
+    rejectedItems.push(`${matchedItem.description} - irrelevant to diagnosis`);
+  }
+
+  return [{
+    step: 'medical',
+    ruleId: 'IRRELEVANT_DIAGNOSTIC_TEST',
+    label: 'Diagnostic tests align with diagnosis',
+    status: rejectedItems.length ? 'warn' : 'pass',
+    detail: rejectedItems.length
+      ? `Irrelevant diagnostic item(s) detected: ${rejectedItems.join('; ')}`
+      : 'No irrelevant diagnostic tests detected',
+    evidence: {
+      manualReview: rejectedItems.length > 0,
+      irrelevantTests,
+      rejectedItems,
+    },
+  }];
 }
 
 export function runMedical({ claim }) {

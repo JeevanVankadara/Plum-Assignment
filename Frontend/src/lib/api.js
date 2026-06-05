@@ -18,11 +18,11 @@ export const api = {
     for (const f of files) fd.append("files", f);
     return fetch(`${BASE}/api/claims`, { method: "POST", body: fd }).then(handle);
   },
-  decide: (id, decision, notes) =>
+  decide: (id, decision, review = {}) =>
     fetch(`${BASE}/api/claims/${id}/decision`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ decision, notes }),
+      body: JSON.stringify(typeof review === "string" ? { decision, notes: review } : { decision, ...review }),
     }).then(handle),
 };
 
@@ -111,6 +111,7 @@ export function adaptClaimDetail(c) {
     })),
     rejectionReasons: c.rejection_reasons || c.rejectionReasons || [],
     rejectedItems: c.rejected_items || c.rejectedItems || [],
+    irrelevantTests: c.irrelevant_tests || c.irrelevantTests || [],
     nextSteps: c.next_steps || c.nextSteps || "",
   };
 }

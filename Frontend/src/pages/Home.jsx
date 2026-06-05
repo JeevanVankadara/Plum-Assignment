@@ -49,10 +49,13 @@ export default function Home() {
     }
   }
 
-  async function handleDecision(id, decision) {
+  async function handleDecision(id, decision, review = {}) {
     try {
-      const backendDecision = decision === "Approved" ? "APPROVED" : "REJECTED";
-      const updated = await api.decide(id, backendDecision);
+      const backendDecision =
+        decision === "Approved" ? "APPROVED" :
+        decision === "Rejected" ? "REJECTED" :
+        decision;
+      const updated = await api.decide(id, backendDecision, review);
       setSelected(adaptClaimDetail(updated));
       await refreshList();
     } catch (e) {

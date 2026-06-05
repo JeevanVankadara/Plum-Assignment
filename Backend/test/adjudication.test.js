@@ -22,9 +22,11 @@ function baseClaim(overrides = {}) {
     serviceDate: '2024-11-01',
     documentTypes: ['prescription', 'bill'],
     diagnosis: 'Viral fever',
+    exclusionMatch: null,
     evidenceText: 'Viral fever prescription paracetamol CBC test',
     prescribedTests: [],
     diagnosticInvoiceTests: [],
+    irrelevantTests: [],
     hasDiagnosticClaim: false,
     preAuthObtained: false,
     lineItems: [
@@ -75,6 +77,7 @@ test('rejects fully excluded weight loss treatment', () => {
   const result = adjudicate({
     claim: baseClaim({
       diagnosis: 'Obesity - BMI 35',
+      exclusionMatch: 'Weight loss treatments',
       evidenceText: 'Obesity bariatric consultation diet plan',
       lineItems: [
         { description: 'Bariatric consultation', amount: 3000, category: 'consultation', payable: true },
@@ -88,6 +91,46 @@ test('rejects fully excluded weight loss treatment', () => {
 
   assert.equal(result.decision, 'REJECTED');
   assert.ok(result.rejectionReasons.includes('EXCLUDED_CONDITION'));
+});
+
+test('rejects exact cosmetic exclusion from Gemini', () => {
+  const result = adjudicate({
+    claim: baseClaim({
+      diagnosis: 'Cosmetic dental alignment',
+      treatment: 'Cosmetic braces fitting for smile improvement',
+      exclusionMatch: 'Cosmetic procedures',
+      lineItems: [
+        { description: 'Orthodontic Braces fitting', amount: 8500, category: 'dental', payable: true },
+        { description: 'Teeth Whitening', amount: 1000, category: 'dental', payable: true },
+      ],
+      claimed: 9500,
+      evidenceText: 'Cosmetic dental alignment braces teeth whitening',
+    }),
+    extractedDocs: docs(['prescription', 'bill']),
+    llmConfidence: 0.97,
+  });
+
+  assert.equal(result.decision, 'REJECTED');
+  assert.ok(result.rejectionReasons.includes('EXCLUDED_CONDITION'));
+});
+
+test('ignores non-policy exclusion labels from Gemini', () => {
+  const result = adjudicate({
+    claim: baseClaim({
+      diagnosis: 'Viral fever',
+      exclusionMatch: 'Cosmetic',
+      lineItems: [
+        { description: 'Doctor consultation', amount: 500, category: 'consultation', payable: true },
+      ],
+      claimed: 500,
+      evidenceText: 'Viral fever doctor consultation',
+    }),
+    extractedDocs: docs(['prescription', 'bill']),
+    llmConfidence: 0.95,
+  });
+
+  assert.equal(result.decision, 'APPROVED');
+  assert.ok(!result.rejectionReasons.includes('EXCLUDED_CONDITION'));
 });
 
 test('partially approves a claim over the per-claim limit', () => {
@@ -130,6 +173,59 @@ test('rejects MRI without pre-authorization', () => {
 
   assert.equal(result.decision, 'REJECTED');
   assert.ok(result.rejectionReasons.includes('PRE_AUTH_MISSING'));
+});
+
+test('routes fever claim with irrelevant MRI to manual review and deducts MRI amount', () => {
+  const result = adjudicate({
+    claim: baseClaim({
+      prescribedTests: ['MRI Brain'],
+      diagnosticInvoiceTests: ['MRI Brain'],
+      irrelevantTests: [
+        {
+          testName: 'MRI Brain',
+          amount: 5000,
+          reason: 'MRI does not align with simple viral fever',
+          excluded: true,
+        },
+      ],
+      hasDiagnosticClaim: true,
+      preAuthObtained: true,
+      lineItems: [
+        { description: 'Doctor consultation', amount: 500, category: 'consultation', payable: true },
+        { description: 'MRI Brain', amount: 5000, category: 'diagnostic', payable: true },
+      ],
+      claimed: 5500,
+      diagnosis: 'Viral fever',
+      evidenceText: 'Viral fever MRI Brain',
+    }),
+    extractedDocs: docs(['prescription', 'bill']),
+    llmConfidence: 0.95,
+  });
+
+  assert.equal(result.decision, 'MANUAL_REVIEW');
+  assert.equal(result.approved, 450);
+  assert.equal(result.deductions, 5000);
+  assert.ok(result.rejectedItems.some(item => item.includes('irrelevant to diagnosis')));
+});
+
+test('ignores irrelevant entries that do not match diagnostic line items', () => {
+  const result = adjudicate({
+    claim: baseClaim({
+      irrelevantTests: [
+        {
+          testName: 'Paracetamol tablets',
+          amount: 500,
+          reason: 'Incorrectly flagged non-diagnostic item',
+          excluded: true,
+        },
+      ],
+    }),
+    extractedDocs: docs(['prescription', 'bill']),
+    llmConfidence: 0.95,
+  });
+
+  assert.equal(result.decision, 'APPROVED');
+  assert.equal(result.approved, 1400);
 });
 
 test('accepts diagnostic invoice when tests match prescription', () => {
