@@ -4,6 +4,7 @@ import { UploadCard } from "../components/UploadCard";
 import { QueueList } from "../components/QueueList";
 import { ClaimDetail } from "../components/ClaimDetail";
 import { Footer } from "../components/Footer";
+import { PageLoader } from "../components/pageLoader";
 import { api, adaptClaimDetail, adaptClaimSummary } from "../lib/api";
 import type { ClaimDecision, ClaimDetailModel, ClaimSummary, ReviewDecisionPayload, UploadPayload } from "../lib/types";
 
@@ -12,6 +13,7 @@ export default function Home() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selected, setSelected] = useState<ClaimDetailModel | null>(null);
   const [busy, setBusy] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const refreshList = useCallback(async () => {
@@ -23,6 +25,8 @@ export default function Home() {
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setInitialLoading(false);
     }
   }, []);
 
@@ -80,6 +84,18 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-background text-foreground font-sans flex flex-col">
+      {initialLoading && <PageLoader />}
+      {busy && !initialLoading && (
+        <div className="fixed inset-0 z-50 bg-background/60 backdrop-blur-[2px] flex items-center justify-center">
+          <div className="bg-white border border-border rounded-xl shadow-lg px-6 py-5 flex flex-col items-center gap-3">
+            <div className="size-9 rounded-full border-2 border-accent border-t-transparent animate-spin" />
+            <div className="text-center">
+              <p className="text-sm font-bold text-foreground">Processing claim documents</p>
+              <p className="text-xs text-muted-foreground mt-1">Render may take a moment to respond.</p>
+            </div>
+          </div>
+        </div>
+      )}
       <TopNav />
       <main className="max-w-7xl mx-auto px-6 py-8 grid grid-cols-1 lg:grid-cols-12 gap-8 flex-1 w-full">
         <div className="lg:col-span-4 flex flex-col gap-6">

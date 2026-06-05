@@ -104,8 +104,9 @@ export function UploadCard({ onSubmit, busy }: UploadCardProps) {
         <button
           onClick={submit}
           disabled={busy}
-          className="w-full bg-accent text-accent-foreground py-2.5 rounded-md text-sm font-semibold hover:bg-accent/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full bg-accent text-accent-foreground py-2.5 rounded-md text-sm font-semibold hover:bg-accent/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
+          {busy && <span className="size-3 rounded-full border-2 border-accent-foreground/40 border-t-accent-foreground animate-spin" />}
           {busy ? "Processing..." : files.length ? "Process Claim" : "Choose Files"}
         </button>
       </div>

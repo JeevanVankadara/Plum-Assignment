@@ -1,4 +1,4 @@
-# CuraLogic — AI OPD Claim Adjudication (Frontend)
+# plom-claim — AI OPD Claim Adjudication (Frontend)
 
 Standalone React + Vite + Tailwind CSS frontend (JSX only, no TypeScript).
 
