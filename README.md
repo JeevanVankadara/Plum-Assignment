@@ -1,86 +1,314 @@
-# Plum AI Automation Engineer \- Intern Assignment Package
+# PlumClaims - AI OPD Claim Adjudication
 
-## 📋 Overview
+PlumClaims is an OPD medical insurance claim adjudication tool built for the Plum intern assignment. It accepts prescription, bill, pharmacy, lab, and image/PDF documents, extracts claim details with Google Gemini, validates them against the provided policy terms, and returns an explainable claim decision.
 
-Welcome\! This package contains everything you need to complete the OPD Claim Adjudication Tool assignment for the AI Automation Engineer intern position at Plum.
+The application contains:
 
-## 📁 Package Contents
+- `Backend` - Node.js, Express, MongoDB, Gemini extraction, adjudication rules, audit trail, member tracking.
+- `Frontend_typescript` - React, Vite, TypeScript, Tailwind UI used for the deployed frontend.
+- `Frontend` - Original JSX frontend copy.
+- `policy_terms.json` - Machine-readable policy limits, exclusions, co-pay, waiting period, covered services, and network hospitals.
+- `adjudication_rules.md` - Rule flow used as the implementation reference.
+- `plum_intern_assignment.md` - Assignment requirements and expected output format.
 
-assignment\_package/
+## Core Behavior
 
-│
+The backend returns decisions in the required assignment format:
 
-├── README.md                       \# This file
+```json
+{
+  "claim_id": "CLM_XXXXX",
+  "decision": "APPROVED/REJECTED/PARTIAL/MANUAL_REVIEW",
+  "approved_amount": 0,
+  "rejection_reasons": [],
+  "confidence_score": 0.95,
+  "notes": "Additional observations",
+  "next_steps": "What the claimant should do"
+}
+```
 
-├── plum\_intern\_assignment.md       \# Main assignment document with requirements
+Additional fields are also returned for the UI, including audit trail, extracted documents, rejected items, deductions, co-pay, irrelevant tests, and admin finalization status.
 
-├── policy\_terms.json               \# Insurance policy configuration
+## Run Locally
 
-├── adjudication\_rules.md          \# Business logic for claim decisions
+### Backend
 
-├── test\_cases.json                 \# Test scenarios with expected outputs
+```bash
+cd Backend
+npm install
+cp .env.example .env
+npm run dev
+```
 
-└── sample\_documents\_guide.md       \# Guide for creating test documents
+Backend runs on:
 
-## 🎯 Your Mission
+```text
+http://localhost:4000
+```
 
-Build an AI-powered web application that automates the adjudication (approval/rejection) of OPD insurance claims by:
+Required backend environment variables:
 
-1. Processing medical documents (bills, prescriptions)  
-2. Extracting relevant information using AI/LLMs  
-3. Validating against policy terms  
-4. Making intelligent approval/rejection decisions
+```text
+PORT=4000
+MONGO_URI=<your MongoDB URI>
+GEMINI_API_KEY=<your Gemini API key>
+GEMINI_MODEL=gemini-2.5-flash
+CORS_ORIGIN=http://localhost:5173
+```
 
-## 🚀 Getting Started
+### TypeScript Frontend
 
-### Step 1: Read the Assignment
+```bash
+cd Frontend_typescript
+npm install
+npm run dev
+```
 
-Start with `plum_intern_assignment.md` to understand the full requirements and evaluation criteria.
+Frontend runs on:
 
-### Step 2: Understand the Business Logic
+```text
+http://localhost:5173
+```
 
-- Review `policy_terms.json` to understand coverage limits and exclusions  
-- Study `adjudication_rules.md` to learn the decision-making process  
-- Examine `test_cases.json` to see expected behavior
+For deployment or a non-local backend, set:
 
-### Step 3: Set Up Your Development Environment
+```text
+VITE_API_BASE=https://your-backend-url.onrender.com
+```
 
-\# Clone this assignment package
+Do not include a trailing slash in `VITE_API_BASE`.
 
-\# Set up your preferred tech stack (React/Next.js \+ Node/Python)
+## Deployment Notes
 
-\# Get API keys for LLM services (OpenAI, Claude, or open-source)
+### Vercel Frontend
 
-### Step 4: Create Test Documents
+Use `Frontend_typescript` as the Vercel root directory.
 
-Use `sample_documents_guide.md` to understand medical document formats and create mock documents for testing.
+Recommended settings:
 
-### Step 5: Build Your Solution
+```text
+Build Command: npm run build
+Output Directory: dist
+Install Command: npm install
+```
 
-Focus on:
+Environment variable:
 
-- Document upload and processing  
-- AI-powered data extraction  
-- Rule engine implementation  
-- Clean, intuitive UI  
-- Comprehensive testing
+```text
+VITE_API_BASE=https://your-backend-url.onrender.com
+```
 
-## 💡 Pro Tips
+`Frontend_typescript/vercel.json` includes an SPA rewrite so refreshes on `/analytics`, `/rules`, and other React Router routes load correctly.
 
-1. **Start Simple**: Build a basic working version first, then add advanced features  
-2. **Use AI Tools**: We encourage using Cursor, Copilot, or other AI coding assistants  
-3. **Document Everything**: Clear documentation shows your thinking process  
-4. **Test Thoroughly**: Use all provided test cases and create additional ones  
-5. **Ask Early**: If something is unclear, ask within the first 24 hours
+### Render Backend
 
-## 📊 Evaluation Focus Areas
+Use `Backend` as the Render root directory.
 
-- **Core Functionality** (40%): Does it work correctly?  
-- **AI Integration** (25%): How effectively do you use LLMs?  
-- **Code Quality** (20%): Is the code clean and maintainable?  
-- **User Experience** (15%): Is it easy to use?
+Recommended settings:
 
-## ⏰ Timeline
+```text
+Build Command: npm install
+Start Command: npm start
+```
 
-- **Total Duration**: 2-3 days from receipt
+Backend environment variables:
 
+```text
+PORT=4000
+MONGO_URI=<your MongoDB URI>
+GEMINI_API_KEY=<your Gemini API key>
+GEMINI_MODEL=gemini-2.5-flash
+CORS_ORIGIN=https://your-vercel-frontend.vercel.app
+```
+
+Do not include a trailing slash in `CORS_ORIGIN`.
+
+## Major Implemented Features
+
+- Gemini-based document extraction for images/PDFs.
+- Console logging of main Gemini extraction fields for testing.
+- Rule-based adjudication aligned with `adjudication_rules.md`.
+- Required document validation using evidence, so a single page can act as both prescription and bill when it contains both clinical and billing information.
+- Item-level exclusions for cosmetic, supplement, non-prescribed, and unsupported items.
+- Diagnostic prescription-to-invoice matching with fuzzy matching.
+- Irrelevant diagnostic test detection and manual review toggle.
+- GST/tax ignored as a non-payable tax component.
+- Admin finalization flow with one-time approve/reject lock.
+- Editable admin notes and next steps saved to MongoDB.
+- Member collection created lazily from claim member IDs.
+- Dynamic analytics, queue search, and status filters.
+
+## Assumptions
+
+These assumptions were made because the provided assignment files do not include every real-world insurance data source.
+
+### Policy Status
+
+Policy active status is checked using `policy_terms.json` `effective_date`.
+
+The policy file does not provide a cancellation date, expiry date, or policy status API. So the backend verifies that the treatment date is on or after the policy effective date, but it cannot verify later cancellation or expiry.
+
+### Waiting Period
+
+Waiting period is calculated from the policy effective date.
+
+The policy file gives an OPD waiting period, but it does not provide individual employee/member enrollment dates. In a real insurer system, waiting period should usually be calculated from the member's enrollment or policy start date. Here, the system uses the policy effective date as the available reference date.
+
+### Member And Dependent Verification
+
+There is no real member, employee, or dependent roster database in the provided policy file.
+
+The backend only checks whether a member ID is present in the uploaded photo/PDF or submitted form data. If the member ID is missing or `UNKNOWN`, the claim is rejected as member not covered. If a member ID is present, the system allows adjudication to continue and adds an audit note that deeper roster verification is not possible.
+
+`policy_terms.json` says dependents are covered, but it does not list actual employees or dependents. So dependent coverage is assumed when a valid-looking member ID is present.
+
+### Members Collection
+
+The MongoDB `members` collection is created and updated by this application.
+
+It starts empty because no mock member data was provided. When a claim is processed, the backend creates or updates the member document using the extracted/submitted member ID and patient name. It stores claim IDs, claim count, and approved spending.
+
+`totalSpent` tracks approved/final payable amount, not every claimed amount.
+
+### Hospital Or Clinic Authenticity
+
+The app extracts provider names, but it does not verify hospital or clinic registration with a government, NABH, NABL, medical council, or licensing database.
+
+The `network_hospitals` array in `policy_terms.json` is treated as a network/tie-up provider list. It is not treated as a legal registration database. A hospital being absent from this list does not automatically mean it is fake; it only means the app cannot verify it as a listed network hospital.
+
+### Doctor Verification
+
+Doctor registration is checked by format and presence.
+
+The app does not call a real medical council registry. If a doctor registration number is present and matches the expected pattern, it is treated as valid for this demo. If it is missing or invalid-looking, the claim can be rejected or flagged.
+
+### Late Submission
+
+Late submission rejection is skipped unless a submission date is explicitly extracted or provided.
+
+This avoids rejecting old sample/test documents only because they were uploaded during the demo after the treatment date.
+
+### Annual Limits
+
+Annual limit usage is calculated from claims stored in this MongoDB database for the same member ID and treatment year.
+
+The system does not know about claims paid outside this app, claims from another database, family floater usage, or company-level policy records. Therefore annual limit checks are accurate only for the data already stored by this application.
+
+### Co-payment
+
+Co-pay is treated as a fixed percentage from `policy_terms.json`.
+
+It is not the same as "amount above the limit". The patient pays the configured co-pay percentage on payable amounts, and also pays any excluded, non-covered, or over-limit amount.
+
+There is no separate generic-medicine co-pay rule in the provided policy terms. Unless the policy explicitly defines a different rule, the normal policy co-pay applies.
+
+### Medical Necessity
+
+Medical necessity is checked using deterministic rules and Gemini-assisted extraction.
+
+The app checks whether diagnosis exists, whether claimed items are plausibly related to the diagnosis, and whether obvious irrelevant tests are present. It does not use a full clinical guideline database, medical protocol engine, or doctor-reviewed treatment protocol database.
+
+Low confidence or suspicious medical necessity cases are routed to manual review.
+
+### Pre-authorization
+
+Pre-authorization is checked specially for MRI and CT scan items.
+
+The policy file has some ambiguity: diagnostic services generally show `pre_authorization_required: false`, while covered tests mention `MRI (with pre-auth)` and `CT Scan (with pre-auth)`. The backend therefore handles MRI/CT as special pre-auth-required items. If more pre-auth services are added later, the rule logic should be extended.
+
+### Diagnostic Evidence
+
+For diagnostic claims, a lab invoice can be enough evidence if it clearly lists the same tests prescribed by the doctor.
+
+Separate lab reports are optional when the diagnostic invoice/bill line items match the prescribed tests. Diagnostic evidence is required only when diagnostic amounts are claimed, not merely because a prescription mentions tests.
+
+Ancillary diagnostic charges such as sample collection are allowed only when at least one prescribed diagnostic test is matched on the same invoice.
+
+### Pharmacy Matching
+
+Pharmacy bill items must match medicines/items prescribed by the doctor.
+
+Items present in the medical bill but not present in the prescription are excluded from payable amount. They are not treated as payable `other` items.
+
+### GST And Taxes
+
+GST, CGST, SGST, tax, round-off, and similar tax/accounting rows are ignored.
+
+They are not treated as payable medical line items and should not trigger missing or unsupported service errors.
+
+### Single Page Prescription And Bill
+
+A single uploaded document can satisfy both prescription and bill requirements if it contains both:
+
+- clinical evidence such as doctor, diagnosis, prescription, treatment, procedure, or tests advised
+- billing evidence such as line items or total amount
+
+This supports prescription-cum-bill documents and clinic invoices that include consultation, medicine, procedure, or diagnostic charges on one page.
+
+### Exclusions And Cosmetic Items
+
+Policy exclusions are applied at line-item level whenever possible.
+
+If a claim contains both valid and excluded items, the excluded items are deducted and the valid items continue through adjudication. For example, root canal treatment can continue while teeth whitening is excluded.
+
+If all claimed payable items are excluded or cosmetic, the claim is rejected completely.
+
+Gemini is prompted to use exact exclusion names from `policy_terms.json`, such as `Cosmetic procedures` and `Vitamins and supplements (unless prescribed for deficiency)`.
+
+### Irrelevant Diagnostic Tests
+
+Gemini can flag diagnostic tests that do not align with the diagnosis, such as an MRI for a simple fever without complication symptoms.
+
+Flagged tests are excluded by default and the claim is sent to manual review. The admin can toggle whether to include or exclude those items before final approval.
+
+### Duplicate And Pattern Checks
+
+Duplicate, same-day, and recent-pattern checks use only claims already stored in this MongoDB database.
+
+The app cannot detect duplicate claims submitted in another system or historical claims not present in this database.
+
+### Gemini Extraction
+
+Document understanding depends on Google Gemini and document legibility.
+
+The backend logs Gemini extraction results in the console for testing, including patient name, member ID, doctor, dates, diagnosis, line items, total amount, exclusion matches, and irrelevant tests.
+
+Temporary Gemini errors such as model high demand can still happen in deployment. The backend includes retry behavior, but Google API availability is outside the app's control.
+
+### Confidence Score
+
+Confidence score is based on extracted document confidence, legibility, parse quality, and rule confidence.
+
+Low-confidence claims are routed to manual review rather than being silently approved.
+
+### Admin Finalization
+
+System decisions are automatic recommendations/current decisions after upload.
+
+Admin approval or rejection is the final decision. Once an admin finalizes a claim, the decision cannot be changed again. Admin notes and next steps can still be edited and saved after finalization for documentation.
+
+### Deployment
+
+The frontend and backend are deployed separately.
+
+The TypeScript frontend uses `VITE_API_BASE` to find the backend. The backend uses `CORS_ORIGIN` to allow the deployed frontend origin. Both values should be exact origins without trailing slashes.
+
+## Useful Commands
+
+Backend:
+
+```bash
+cd Backend
+npm install
+npm run dev
+npm test
+```
+
+TypeScript frontend:
+
+```bash
+cd Frontend_typescript
+npm install
+npm run dev
+npm run build
+```

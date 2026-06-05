@@ -233,6 +233,8 @@ function toDecisionDto(claimDoc) {
   const claim = typeof claimDoc.toObject === 'function' ? claimDoc.toObject() : claimDoc;
   const documents = claim.documents || [];
   const auditTrail = (claim.trail || []).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  const effectiveNotes = claim.adminNotes || claim.notes;
+  const effectiveNextSteps = claim.adminNextSteps || claim.nextSteps;
 
   return {
     id: claim._id,
@@ -271,6 +273,7 @@ function toDecisionDto(claimDoc) {
     adminDecision: claim.adminDecision || null,
     adminDecisionAt: claim.adminDecisionAt || null,
     adminNotes: claim.adminNotes || null,
+    adminNextSteps: claim.adminNextSteps || null,
     approved_amount: claim.approved || 0,
     approved: claim.approved || 0,
     deductions: claim.deductions || 0,
@@ -282,9 +285,13 @@ function toDecisionDto(claimDoc) {
     fraud_flags: claim.fraudFlags || [],
     confidence_score: claim.confidence || 0,
     confidence: claim.confidence || 0,
-    notes: claim.notes,
-    next_steps: claim.nextSteps,
-    nextSteps: claim.nextSteps,
+    notes: effectiveNotes,
+    next_steps: effectiveNextSteps,
+    nextSteps: effectiveNextSteps,
+    system_notes: claim.notes,
+    systemNotes: claim.notes,
+    system_next_steps: claim.nextSteps,
+    systemNextSteps: claim.nextSteps,
     documents: documents.map(d => ({
       id: d._id,
       filename: d.filename,
@@ -398,7 +405,7 @@ export async function getClaim(req, res, next) {
 
 export async function overrideDecision(req, res, next) {
   try {
-    const { decision, reason, notes, approved, deductions, irrelevantTestOverrides } = req.body;
+    const { decision, reason, notes, nextSteps, approved, deductions, irrelevantTestOverrides } = req.body;
     const claim = await Claim.findById(req.params.id);
     if (!claim) return res.status(404).json({ error: 'Claim not found' });
     if (claim.adminFinalized) {
@@ -435,6 +442,7 @@ export async function overrideDecision(req, res, next) {
     claim.adminDecision = decision;
     claim.adminDecisionAt = new Date();
     claim.adminNotes = notes || reason || null;
+    claim.adminNextSteps = nextSteps || null;
     await claim.save();
     const member = await adjustMemberSpendForOverride({
       claim,
@@ -451,6 +459,34 @@ export async function overrideDecision(req, res, next) {
       label: 'Admin final decision',
       status: decision === 'APPROVED' ? 'pass' : 'fail',
       detail: reason || notes || `Admin finalized claim as ${decision}`,
+      order: claim.trail.length,
+    });
+    claim.trail.push(trail._id);
+    await claim.save();
+
+    res.json(toDecisionDto(await populated(claim._id)));
+  } catch (err) { next(err); }
+}
+
+export async function updateAdminText(req, res, next) {
+  try {
+    const { notes, nextSteps } = req.body;
+    const claim = await Claim.findById(req.params.id);
+    if (!claim) return res.status(404).json({ error: 'Claim not found' });
+
+    claim.adminNotes = typeof notes === 'string' ? notes : claim.adminNotes;
+    claim.adminNextSteps = typeof nextSteps === 'string' ? nextSteps : claim.adminNextSteps;
+    await claim.save();
+
+    const trail = await AuditTrail.create({
+      claimId: claim.claimId,
+      memberId: claim.memberId,
+      member: claim.member,
+      step: 'manual',
+      ruleId: 'ADMIN_TEXT_UPDATE',
+      label: 'Admin notes updated',
+      status: 'pass',
+      detail: 'Admin updated decision notes or next steps',
       order: claim.trail.length,
     });
     claim.trail.push(trail._id);

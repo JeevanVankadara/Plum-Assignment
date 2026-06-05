@@ -26,6 +26,9 @@ export const mockClaims: ClaimDetailModel[] = [
     rejectionReasons: [],
     rejectedItems: [],
     irrelevantTests: [],
+    notes: "Claim requires reviewer attention.",
     nextSteps: "",
+    systemNotes: "Claim requires reviewer attention.",
+    systemNextSteps: "",
   },
 ];

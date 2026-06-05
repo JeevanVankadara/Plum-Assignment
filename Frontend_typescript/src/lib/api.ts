@@ -1,4 +1,5 @@
 import type {
+  AdminTextPayload,
   BackendClaimDto,
   ClaimDecision,
   ClaimDetailModel,
@@ -33,6 +34,12 @@ export const api = {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(typeof review === "string" ? { decision, notes: review } : { decision, ...review }),
+    }).then((res) => handle<BackendClaimDto>(res)),
+  saveAdminText: (id: string, payload: AdminTextPayload): Promise<BackendClaimDto> =>
+    fetch(`${BASE}/api/claims/${id}/admin-text`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
     }).then((res) => handle<BackendClaimDto>(res)),
 };
 
@@ -127,7 +134,11 @@ export function adaptClaimDetail(c: BackendClaimDto): ClaimDetailModel {
     rejectedItems: c.rejected_items || c.rejectedItems || [],
     irrelevantTests: c.irrelevant_tests || c.irrelevantTests || [],
     nextSteps: c.next_steps || c.nextSteps || "",
+    notes: c.notes || "",
+    systemNotes: c.system_notes || c.systemNotes || "",
+    systemNextSteps: c.system_next_steps || c.systemNextSteps || "",
     adminDecisionAt: c.adminDecisionAt || null,
     adminNotes: c.adminNotes || null,
+    adminNextSteps: c.adminNextSteps || null,
   };
 }

@@ -82,6 +82,17 @@ export default function Home() {
     }
   }
 
+  async function handleSaveAdminText(id: string, notes: string, nextSteps: string): Promise<void> {
+    try {
+      const updated = await api.saveAdminText(id, { notes, nextSteps });
+      setSelected(adaptClaimDetail(updated));
+      await refreshList();
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
   return (
     <div className="min-h-screen bg-background text-foreground font-sans flex flex-col">
       {initialLoading && <PageLoader />}
@@ -109,7 +120,11 @@ export default function Home() {
         </div>
         <div className="lg:col-span-8 flex flex-col gap-6">
           {selected ? (
-            <ClaimDetail claim={selected} onDecision={handleDecision} />
+            <ClaimDetail
+              claim={selected}
+              onDecision={handleDecision}
+              onSaveAdminText={handleSaveAdminText}
+            />
           ) : (
             <div className="bg-white rounded-xl border border-border p-12 text-center text-sm text-muted-foreground">
               {claims.length === 0

@@ -19,6 +19,12 @@ export interface ReviewDecisionPayload {
   deductions?: number;
   irrelevantTestOverrides?: IrrelevantTestOverride[];
   notes?: string;
+  nextSteps?: string;
+}
+
+export interface AdminTextPayload {
+  notes: string;
+  nextSteps: string;
 }
 
 export interface BackendAuditTrailItem {
@@ -58,6 +64,11 @@ export interface BackendClaimDto {
   adminDecision?: "APPROVED" | "REJECTED" | null;
   adminDecisionAt?: string | null;
   adminNotes?: string | null;
+  adminNextSteps?: string | null;
+  system_notes?: string | null;
+  systemNotes?: string | null;
+  system_next_steps?: string | null;
+  systemNextSteps?: string | null;
   audit_trail?: BackendAuditTrailItem[];
   auditTrail?: BackendAuditTrailItem[];
   trail?: BackendAuditTrailItem[];
@@ -67,6 +78,7 @@ export interface BackendClaimDto {
   rejectedItems?: string[];
   irrelevant_tests?: IrrelevantTest[];
   irrelevantTests?: IrrelevantTest[];
+  notes?: string;
   next_steps?: string;
   nextSteps?: string;
   createdAt?: string;
@@ -105,8 +117,12 @@ export interface ClaimDetailModel extends ClaimSummary {
   rejectedItems: string[];
   irrelevantTests: IrrelevantTest[];
   nextSteps: string;
+  notes: string;
+  systemNotes: string;
+  systemNextSteps: string;
   adminDecisionAt?: string | null;
   adminNotes?: string | null;
+  adminNextSteps?: string | null;
 }
 
 export interface UploadPayload {

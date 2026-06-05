@@ -5,18 +5,18 @@ import type { ClaimDecision, ClaimDetailModel, ReviewDecisionPayload } from "../
 interface ClaimDetailProps {
   claim: ClaimDetailModel;
   onDecision: (id: string, decision: ClaimDecision, review?: ReviewDecisionPayload) => Promise<void> | void;
+  onSaveAdminText?: (id: string, notes: string, nextSteps: string) => Promise<void> | void;
 }
 
 function statusBadge(status: string): string {
-  if (status === "APPROVED")
-    return "bg-success/10 text-success ring-success/20";
+  if (status === "APPROVED") return "bg-success/10 text-success ring-success/20";
   if (status === "REJECTED") return "bg-error/10 text-error ring-error/20";
   return "bg-warning/10 text-warning ring-warning/20";
 }
 
-function confidenceColor(c: number): string {
-  if (c >= 90) return "bg-success";
-  if (c >= 70) return "bg-warning";
+function confidenceColor(confidence: number): string {
+  if (confidence >= 90) return "bg-success";
+  if (confidence >= 70) return "bg-warning";
   return "bg-error";
 }
 
@@ -39,16 +39,16 @@ function finalDecisionLabel(decision?: string | null): string {
 }
 
 function money(value: number): string {
-  return `₹${(Number(value) || 0).toLocaleString("en-IN")}.00`;
+  return `Rs.${(Number(value) || 0).toLocaleString("en-IN")}.00`;
 }
 
-export function ClaimDetail({ claim, onDecision }: ClaimDetailProps) {
+export function ClaimDetail({ claim, onDecision, onSaveAdminText }: ClaimDetailProps) {
   const providerName = valueOrDash(claim.provider).split(",")[0];
-  const doctorLine = `${valueOrDash(claim.doctor)}${
-    claim.docRegNo && claim.docRegNo !== "-" ? ` - Reg: ${claim.docRegNo}` : ""
-  }`;
   const irrelevantTests = claim.irrelevantTests || [];
   const [excludedMap, setExcludedMap] = useState<Record<string, boolean>>({});
+  const [editableNotes, setEditableNotes] = useState(claim.notes || "");
+  const [editableNextSteps, setEditableNextSteps] = useState(claim.nextSteps || "");
+  const [savingText, setSavingText] = useState(false);
 
   useEffect(() => {
     setExcludedMap(
@@ -60,6 +60,11 @@ export function ClaimDetail({ claim, onDecision }: ClaimDetailProps) {
       )
     );
   }, [irrelevantTests]);
+
+  useEffect(() => {
+    setEditableNotes(claim.notes || "");
+    setEditableNextSteps(claim.nextSteps || "");
+  }, [claim.id, claim.notes, claim.nextSteps]);
 
   const reviewTotals = useMemo(() => {
     const delta = irrelevantTests.reduce((sum, item, index) => {
@@ -99,6 +104,21 @@ export function ClaimDetail({ claim, onDecision }: ClaimDetailProps) {
         ? "Approve Reviewed Amount"
         : "Approve Final";
   const rejectLabel = claim.status === "REJECTED" ? "Finalize Rejection" : "Reject Claim";
+  const decisionApprovedAmount = isFinalized || claim.status !== "REJECTED" ? reviewTotals.approved : finalApprovalAmount;
+  const confidenceDecimal = Math.max(0, Math.min(1, claim.confidence / 100)).toFixed(2);
+  const decisionNotes = editableNotes || "-";
+  const decisionNextSteps = editableNextSteps || "-";
+  const rejectionReasonsJson = JSON.stringify(claim.rejectionReasons, null, 2).replace(/\n/g, "\n  ");
+
+  async function saveAdminText(): Promise<void> {
+    if (!onSaveAdminText || savingText) return;
+    setSavingText(true);
+    try {
+      await onSaveAdminText(claim.id, editableNotes, editableNextSteps);
+    } finally {
+      setSavingText(false);
+    }
+  }
 
   return (
     <div className="bg-white rounded-xl border border-border overflow-hidden shadow-md font-sans">
@@ -114,7 +134,7 @@ export function ClaimDetail({ claim, onDecision }: ClaimDetailProps) {
           </div>
           <p className="text-sm text-muted-foreground">
             Patient: <span className="text-foreground font-medium">{claim.patient}</span>{" "}
-            • ID: <span className="font-mono">{claim.memberId}</span>
+            - ID: <span className="font-mono">{claim.memberId}</span>
           </p>
           <p className={`text-[11px] font-bold mt-2 ${isFinalized ? "text-success" : "text-muted-foreground"}`}>
             {isFinalized ? finalDecisionLabel(claim.adminDecision) : systemSuggestion(String(claim.status))}
@@ -143,39 +163,76 @@ export function ClaimDetail({ claim, onDecision }: ClaimDetailProps) {
           <h3 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-4">
             Extracted Context
           </h3>
-          <div className="w-full aspect-[3/4] bg-white border border-border shadow-sm rounded relative overflow-hidden">
-            <div className="absolute top-6 left-6 right-6 h-10 border-b border-dashed border-border flex items-center justify-between">
-              <span className="font-display font-bold text-sm text-accent">
-                {providerName}
-              </span>
-              <span className="text-[9px] text-muted-foreground font-mono">
-                {valueOrDash(claim.serviceDate)}
-              </span>
-            </div>
-            <div className="absolute top-20 left-6 right-6 space-y-2">
-              <div className="h-2 w-2/3 bg-foreground/10 rounded"></div>
-              <div className="h-2 w-1/2 bg-foreground/10 rounded"></div>
-            </div>
-            <div className="absolute top-[36%] left-6 right-6 h-8 border-2 border-warning/50 bg-warning/5 rounded flex items-center px-2">
-              <span className="text-[9px] font-mono text-warning font-bold">
-                Patient: {valueOrDash(claim.patient)}
-              </span>
-            </div>
-            <div className="absolute top-[52%] left-10 w-1/2 h-6 border-2 border-success/50 bg-success/5 rounded flex items-center px-2">
-              <span className="text-[9px] font-mono text-success font-bold truncate">
-                {doctorLine}
-              </span>
-            </div>
-            <div className="absolute bottom-4 right-4 text-[9px] font-mono text-muted-foreground">
-              Reg: {valueOrDash(claim.docRegNo)}
+          <div className="rounded-lg border border-border bg-white p-4 shadow-sm">
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <div>
+                <p className="text-[10px] font-bold uppercase text-muted-foreground">Patient</p>
+                <p className="mt-1 font-semibold text-foreground">{valueOrDash(claim.patient)}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase text-muted-foreground">Date</p>
+                <p className="mt-1 font-mono text-foreground">{valueOrDash(claim.serviceDate)}</p>
+              </div>
+              <div className="col-span-2">
+                <p className="text-[10px] font-bold uppercase text-muted-foreground">Provider</p>
+                <p className="mt-1 font-semibold text-foreground">{providerName}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase text-muted-foreground">Doctor</p>
+                <p className="mt-1 font-semibold text-foreground">{valueOrDash(claim.doctor)}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase text-muted-foreground">Reg. No</p>
+                <p className="mt-1 font-mono text-foreground">{valueOrDash(claim.docRegNo)}</p>
+              </div>
+              <div className="col-span-2">
+                <p className="text-[10px] font-bold uppercase text-muted-foreground">Diagnosis</p>
+                <p className="mt-1 text-muted-foreground leading-relaxed">{claim.department || "-"}</p>
+              </div>
             </div>
           </div>
-          <p className="text-[11px] text-muted-foreground mt-3 leading-relaxed">
-            <span className="font-mono font-semibold text-foreground">
-              {claim.doctor}
-            </span>{" "}
-            • {claim.department}.
-          </p>
+
+          <h3 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mt-6 mb-4">
+            Decision Output
+          </h3>
+          <div className="rounded-lg border border-border bg-white p-4 shadow-sm overflow-hidden min-w-0">
+            <pre className="max-w-full text-[11px] leading-6 font-mono text-foreground whitespace-pre-wrap break-all overflow-hidden">
+{`{
+  "claim_id": "${claim.claimNo || claim.id}",
+  "decision": "${claim.status}",
+  "approved_amount": ${Math.round(decisionApprovedAmount)},
+  "rejection_reasons": ${rejectionReasonsJson},
+  "confidence_score": ${confidenceDecimal},
+  "notes": `}
+            </pre>
+            <textarea
+              value={editableNotes}
+              onChange={(event) => setEditableNotes(event.target.value)}
+              rows={3}
+              className="w-full max-w-full rounded border border-border bg-background px-3 py-2 text-[11px] font-mono text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20"
+            />
+            <pre className="max-w-full text-[11px] leading-6 font-mono text-foreground whitespace-pre-wrap break-all overflow-hidden">
+{`,
+  "next_steps": `}
+            </pre>
+            <textarea
+              value={editableNextSteps}
+              onChange={(event) => setEditableNextSteps(event.target.value)}
+              rows={3}
+              className="w-full max-w-full rounded border border-border bg-background px-3 py-2 text-[11px] font-mono text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20"
+            />
+            <pre className="max-w-full text-[11px] leading-6 font-mono text-foreground whitespace-pre-wrap break-all overflow-hidden">
+{`}`}
+            </pre>
+            <button
+              type="button"
+              onClick={saveAdminText}
+              disabled={savingText}
+              className="mt-3 w-full rounded bg-white border border-border py-2 text-xs font-bold text-foreground hover:bg-background transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {savingText ? "Saving..." : "Save Notes"}
+            </button>
+          </div>
         </div>
 
         <div className="p-6 flex flex-col">
@@ -183,32 +240,32 @@ export function ClaimDetail({ claim, onDecision }: ClaimDetailProps) {
             Adjudication Trail
           </h3>
           <div className="space-y-5 max-h-[420px] overflow-y-auto pr-2">
-            {claim.rules.map((r) => {
-              const isPass = r.state === "pass";
-              const isWarn = r.state === "warn";
+            {claim.rules.map((rule) => {
+              const isPass = rule.state === "pass";
+              const isWarn = rule.state === "warn";
               const dotBg = isPass ? "bg-success" : isWarn ? "bg-warning" : "bg-error";
               const ring = isPass ? "" : isWarn ? "ring-4 ring-warning/10" : "ring-4 ring-error/10";
               const wrap = isPass
                 ? ""
                 : isWarn
-                ? "border border-warning/20 bg-warning/[0.03] p-3 rounded-lg"
-                : "border border-error/20 bg-error/[0.03] p-3 rounded-lg";
+                  ? "border border-warning/20 bg-warning/[0.03] p-3 rounded-lg"
+                  : "border border-error/20 bg-error/[0.03] p-3 rounded-lg";
               return (
-                <div key={`${r.id}-${r.label}`} className="flex gap-4">
+                <div key={`${rule.id}-${rule.label}`} className="flex gap-4">
                   <div className={`mt-1 size-5 rounded-full ${dotBg} ${ring} flex items-center justify-center shrink-0`}>
                     <span className="text-white text-[10px] font-bold">
-                      {isPass ? "✓" : isWarn ? "!" : "✕"}
+                      {isPass ? "OK" : isWarn ? "!" : "X"}
                     </span>
                   </div>
                   <div className={`flex-1 ${wrap}`}>
-                    <div className="flex justify-between">
-                      <p className="text-xs font-bold text-foreground">{r.label}</p>
+                    <div className="flex justify-between gap-3">
+                      <p className="text-xs font-bold text-foreground">{rule.label}</p>
                       <span className="text-[10px] font-mono text-muted-foreground">
-                        {r.id}
+                        {rule.id}
                       </span>
                     </div>
                     <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">
-                      {r.detail}
+                      {rule.detail}
                     </p>
                   </div>
                 </div>
@@ -262,7 +319,8 @@ export function ClaimDetail({ claim, onDecision }: ClaimDetailProps) {
                   approved: 0,
                   deductions: claim.claimed,
                   irrelevantTestOverrides: irrelevantOverrides,
-                  notes: "Admin finalized the claim as rejected.",
+                  notes: editableNotes,
+                  nextSteps: editableNextSteps,
                 })}
                 className="flex-1 bg-white border border-border py-2 rounded text-xs font-bold text-foreground hover:bg-background transition-colors"
               >
@@ -276,9 +334,8 @@ export function ClaimDetail({ claim, onDecision }: ClaimDetailProps) {
                     approved: finalApprovalAmount,
                     deductions: claim.status === "REJECTED" ? finalApprovalDeductions : reviewTotals.deductions,
                     irrelevantTestOverrides: irrelevantOverrides,
-                    notes: hasIrrelevantReview
-                      ? "Admin finalized the reviewed amount after irrelevant-test toggle review."
-                      : "Admin finalized the claim as approved.",
+                    notes: editableNotes,
+                    nextSteps: editableNextSteps,
                   });
                 }}
                 className="flex-1 bg-accent text-accent-foreground py-2 rounded text-xs font-bold hover:bg-accent/90 transition-all shadow-lg shadow-accent/10"

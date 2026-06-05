@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import Claim from '../src/models/Claim.js';
 import AuditTrail from '../src/models/AuditTrail.js';
 import Member from '../src/models/Member.js';
-import { overrideDecision } from '../src/controllers/claimsController.js';
+import { overrideDecision, updateAdminText } from '../src/controllers/claimsController.js';
 
 function patchModel(t, model, patches) {
   const originals = {};
@@ -101,6 +101,7 @@ test('finalizes an unfinalized claim once and returns finalization fields', asyn
       approved: 900,
       deductions: 100,
       notes: 'Admin approved final amount',
+      nextSteps: 'Pay claimant after final audit.',
     },
   };
   const res = responseRecorder();
@@ -113,9 +114,13 @@ test('finalizes an unfinalized claim once and returns finalization fields', asyn
   assert.equal(claim.deductions, 100);
   assert.equal(claim.adminFinalized, true);
   assert.equal(claim.adminDecision, 'APPROVED');
+  assert.equal(claim.adminNotes, 'Admin approved final amount');
+  assert.equal(claim.adminNextSteps, 'Pay claimant after final audit.');
   assert.ok(claim.adminDecisionAt instanceof Date);
   assert.equal(res.body.adminFinalized, true);
   assert.equal(res.body.adminDecision, 'APPROVED');
+  assert.equal(res.body.notes, 'Admin approved final amount');
+  assert.equal(res.body.next_steps, 'Pay claimant after final audit.');
 });
 
 test('rejects a second admin finalization attempt with 409', async (t) => {
@@ -136,4 +141,69 @@ test('rejects a second admin finalization attempt with 409', async (t) => {
 
   assert.equal(res.statusCode, 409);
   assert.equal(res.body.error, 'Claim decision is already finalized');
+});
+
+test('saves admin notes and next steps without changing finalized decision', async (t) => {
+  const claim = {
+    _id: 'claim-object-2',
+    claimId: 'CLM_TEXT',
+    memberId: 'MEM-TEXT',
+    member: 'member-2',
+    decision: 'REJECTED',
+    approved: 0,
+    claimed: 1000,
+    adminFinalized: true,
+    adminDecision: 'REJECTED',
+    adminNotes: 'Old notes',
+    adminNextSteps: 'Old next steps',
+    trail: [],
+    async save() {},
+  };
+  let findByIdCalls = 0;
+
+  patchModel(t, Claim, {
+    findById: () => {
+      findByIdCalls += 1;
+      if (findByIdCalls === 1) return Promise.resolve(claim);
+      return {
+        populate() {
+          return {
+            populate() {
+              return {
+                populate() {
+                  return Promise.resolve({
+                    ...claim,
+                    documents: [],
+                    trail: [],
+                  });
+                },
+              };
+            },
+          };
+        },
+      };
+    },
+  });
+  patchModel(t, AuditTrail, {
+    create: async () => ({ _id: 'trail-text' }),
+  });
+
+  const req = {
+    params: { id: 'claim-object-2' },
+    body: {
+      notes: 'Updated notes',
+      nextSteps: 'Updated next steps',
+    },
+  };
+  const res = responseRecorder();
+
+  await updateAdminText(req, res, (err) => { throw err; });
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(claim.decision, 'REJECTED');
+  assert.equal(claim.adminFinalized, true);
+  assert.equal(claim.adminNotes, 'Updated notes');
+  assert.equal(claim.adminNextSteps, 'Updated next steps');
+  assert.equal(res.body.notes, 'Updated notes');
+  assert.equal(res.body.next_steps, 'Updated next steps');
 });

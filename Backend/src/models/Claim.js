@@ -48,6 +48,7 @@ const claimSchema = new mongoose.Schema({
   adminDecision: { type: String, enum: ['APPROVED','REJECTED', null], default: null },
   adminDecisionAt: Date,
   adminNotes: String,
+  adminNextSteps: String,
   rejectionReasons: [String],
   rejectedItems: [String],
   fraudFlags: [String],
