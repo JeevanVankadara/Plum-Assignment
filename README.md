@@ -1,5 +1,9 @@
 # PlumClaims - AI OPD Claim Adjudication
 
+GitHub Repository: [JeevanVankadara/Plum-Assignment](https://github.com/JeevanVankadara/Plum-Assignment)
+
+Deployed Application: [https://plum-assignment-nine.vercel.app/](https://plum-assignment-nine.vercel.app/)
+
 PlumClaims is an OPD medical insurance claim adjudication tool built for the Plum intern assignment. It accepts prescription, bill, pharmacy, lab, and image/PDF documents, extracts claim details with Google Gemini, validates them against the provided policy terms, and returns an explainable claim decision.
 
 The application contains:
@@ -274,12 +278,6 @@ Document understanding depends on Google Gemini and document legibility.
 The backend logs Gemini extraction results in the console for testing, including patient name, member ID, doctor, dates, diagnosis, line items, total amount, exclusion matches, and irrelevant tests.
 
 Temporary Gemini errors such as model high demand can still happen in deployment. The backend includes retry behavior, but Google API availability is outside the app's control.
-
-### Confidence Score
-
-Confidence score is based on extracted document confidence, legibility, parse quality, and rule confidence.
-
-Low-confidence claims are routed to manual review rather than being silently approved.
 
 ### Admin Finalization
 
