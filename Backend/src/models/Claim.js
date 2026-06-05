@@ -4,6 +4,8 @@ const lineItemSchema = new mongoose.Schema({
   description: String,
   amount: Number,
   category: String,
+  exclusionMatch: String,
+  prescriptionMatched: Boolean,
   payable: { type: Boolean, default: true },
   rejectionReason: String,
 }, { _id: false });
@@ -30,6 +32,7 @@ const claimSchema = new mongoose.Schema({
   submissionDate: String,
   documentTypes: [String],
   prescribedTests: [String],
+  prescribedPharmacyItems: [String],
   diagnosticInvoiceTests: [String],
   irrelevantTests: [irrelevantTestSchema],
   hasDiagnosticClaim: { type: Boolean, default: false },

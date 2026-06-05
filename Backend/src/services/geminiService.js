@@ -14,6 +14,7 @@ Extract the following fields from the attached document and return STRICT JSON o
 Classify documentType carefully:
 - Use "prescription" for any doctor/clinic prescription, Rx note, dental prescription, treatment plan, or doctor letterhead that contains diagnosis, prescribed medicines, prescribed tests, advised procedures, doctor registration, or doctor's signature/stamp.
 - A prescription remains "prescription" even if it also mentions consultation fee, procedure fee, dental braces fee, treatment charges, or medicine names.
+- A single page can be both prescription evidence and bill evidence. If a doctor-issued prescription also contains consultation fees, procedure charges, pharmacy items, lab/test charges, invoice numbers, totals, or paid bill rows, still use "prescription" but extract every billable row into lineItems.
 - Use "bill" only for invoices, receipts, pharmacy cash memos, paid bills, or lab/diagnostic invoices whose main purpose is itemized billing/payment.
 - Use "lab_report" only for actual diagnostic test result reports, not for lab invoices.
 - If both prescription and bill-like content appear, prefer "prescription" when the document is issued by a doctor and contains Rx/diagnosis/treatment advice.
@@ -33,6 +34,14 @@ Classify policy exclusions exactly:
   "Vitamins and supplements (unless prescribed for deficiency)"
 - If no exclusion applies, set "exclusionMatch" to null.
 - Do not invent new exclusion labels. Use only the exact strings above or null.
+- For each billable line item, also set item-level "exclusionMatch" when that specific item is excluded.
+- Mark cosmetic dental/aesthetic items such as teeth whitening, cosmetic bleaching, smile improvement, aesthetic dental polishing, Botox, fillers, or liposuction as exactly "Cosmetic procedures".
+- Do not mark the whole claim excluded if only some line items are cosmetic; keep covered line items separate.
+
+Classify pharmacy bills carefully:
+- For pharmacy invoices/cash memos, use category "pharmacy" for retail pharmacy rows such as tablets, capsules, syrups, sachets, ORS, vapor rubs, cough syrups, strips, chewables, thermometers, steam inhalers, and similar items unless the item is clearly diagnostic, dental, vision, or alternative treatment.
+- Do not use category "other" for pharmacy bill rows only because they are devices/accessories. The backend will decide whether they are payable by checking if they were prescribed.
+- For each pharmacy line item, set "prescriptionMatched" to true only if that exact or clearly equivalent item appears in an uploaded prescription; otherwise false. If uncertain, use false.
 
 Check diagnostic test relevance:
 - Be particular about whether diagnostic tests align with the patient's diagnosis/problem.
@@ -59,7 +68,7 @@ Check diagnostic test relevance:
   "exclusionMatch": string | null,
   "irrelevantTests": [{ "testName": string, "amount": number, "reason": string }],
   "preAuthObtained": boolean,
-  "lineItems": [{ "description": string, "amount": number, "category": "consultation|pharmacy|diagnostic|dental|vision|alternative|other" }],
+  "lineItems": [{ "description": string, "amount": number, "category": "consultation|pharmacy|diagnostic|dental|vision|alternative|other", "exclusionMatch": string | null, "prescriptionMatched": boolean | null }],
   "totalAmount": number,
   "legibilityScore": number  // 0..1
 }

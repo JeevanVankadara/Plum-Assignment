@@ -14,6 +14,10 @@ const CATEGORY_ALIASES = {
   consultation_fees: 'consultation',
   medicines: 'pharmacy',
   medicine: 'pharmacy',
+  pharmacy_item: 'pharmacy',
+  pharmacy_items: 'pharmacy',
+  medical_supply: 'pharmacy',
+  medical_supplies: 'pharmacy',
   drug: 'pharmacy',
   drugs: 'pharmacy',
   lab: 'diagnostic',
@@ -26,8 +30,27 @@ const CATEGORY_ALIASES = {
   unani: 'alternative',
 };
 
+const POLICY_EXCLUSIONS = new Set([
+  'Cosmetic procedures',
+  'Weight loss treatments',
+  'Infertility treatments',
+  'Experimental treatments',
+  'Self-inflicted injuries',
+  'Adventure sports injuries',
+  'War and nuclear risks',
+  'HIV/AIDS treatment',
+  'Alcoholism/drug abuse treatment',
+  'Non-allopathic treatments (except listed)',
+  'Vitamins and supplements (unless prescribed for deficiency)',
+]);
+
 function cleanString(value) {
   return typeof value === 'string' ? value.trim() : value;
+}
+
+function normalizeExclusion(value) {
+  const clean = cleanString(value);
+  return POLICY_EXCLUSIONS.has(clean) ? clean : null;
 }
 
 function normalizeDocType(type) {
@@ -42,13 +65,15 @@ function normalizeDocType(type) {
 function normalizeCategory(category, description = '') {
   const raw = cleanString(category)?.toLowerCase();
   if (raw && CATEGORY_ALIASES[raw]) return CATEGORY_ALIASES[raw];
-  if (['consultation', 'pharmacy', 'diagnostic', 'dental', 'vision', 'alternative', 'other'].includes(raw)) {
+  if (['consultation', 'pharmacy', 'diagnostic', 'dental', 'vision', 'alternative'].includes(raw)) {
     return raw;
   }
 
   const text = `${raw || ''} ${description}`.toLowerCase();
   if (/consult|doctor|opd/.test(text)) return 'consultation';
-  if (/medicine|tablet|capsule|drug|pharmacy|rx/.test(text)) return 'pharmacy';
+  if (
+    /medicine|tablet|\btab\b|capsule|\bcap\b|drug|pharmacy|rx|syrup|sachet|\bors\b|vicks|vapo|vaporub|inhaler|thermometer|chewable|\bmg\b|\bml\b/.test(text)
+  ) return 'pharmacy';
   if (/test|scan|x-?ray|mri|ct|cbc|ecg|ultrasound|lab/.test(text)) return 'diagnostic';
   if (/dental|tooth|teeth|root canal|filling|extraction/.test(text)) return 'dental';
   if (/eye|vision|glasses|lens|lasik/.test(text)) return 'vision';
@@ -62,6 +87,8 @@ function normalizeLineItem(item = {}) {
     description,
     amount: Number(item.amount ?? item.total ?? item.price ?? 0) || 0,
     category: normalizeCategory(item.category, description),
+    exclusionMatch: normalizeExclusion(item.exclusionMatch),
+    prescriptionMatched: item.prescriptionMatched === true ? true : item.prescriptionMatched === false ? false : null,
     payable: item.payable !== false,
     rejectionReason: item.rejectionReason || null,
   };
@@ -88,6 +115,10 @@ function testNamesFromDoc(fields = {}) {
   ];
 }
 
+function prescribedPharmacyItemsFromDoc(fields = {}) {
+  return asTextArray(fields.prescription);
+}
+
 function fieldText(fields = {}) {
   return [
     fields.diagnosis,
@@ -98,25 +129,6 @@ function fieldText(fields = {}) {
     ...(Array.isArray(fields.tests_prescribed) ? fields.tests_prescribed : []),
     ...(Array.isArray(fields.lineItems) ? fields.lineItems.map(i => `${i.description || ''} ${i.category || ''}`) : []),
   ].filter(Boolean).join(' ');
-}
-
-const POLICY_EXCLUSIONS = new Set([
-  'Cosmetic procedures',
-  'Weight loss treatments',
-  'Infertility treatments',
-  'Experimental treatments',
-  'Self-inflicted injuries',
-  'Adventure sports injuries',
-  'War and nuclear risks',
-  'HIV/AIDS treatment',
-  'Alcoholism/drug abuse treatment',
-  'Non-allopathic treatments (except listed)',
-  'Vitamins and supplements (unless prescribed for deficiency)',
-]);
-
-function normalizeExclusion(value) {
-  const clean = cleanString(value);
-  return POLICY_EXCLUSIONS.has(clean) ? clean : null;
 }
 
 function normalizeIrrelevantTest(item = {}) {
@@ -173,6 +185,9 @@ function mergeExtracted(docs, fallbackMemberId, fallbackSubmissionDate) {
   const prescribedTests = fields
     .filter(f => normalizeDocType(f.documentType) === 'prescription')
     .flatMap(testNamesFromDoc);
+  const prescribedPharmacyItems = fields
+    .filter(f => normalizeDocType(f.documentType) === 'prescription')
+    .flatMap(prescribedPharmacyItemsFromDoc);
   const diagnosticInvoiceTests = fields
     .filter(f => normalizeDocType(f.documentType) !== 'prescription')
     .flatMap(testNamesFromDoc);
@@ -202,6 +217,7 @@ function mergeExtracted(docs, fallbackMemberId, fallbackSubmissionDate) {
     department: documentTypes.join(', ') || 'OPD',
     documentTypes,
     prescribedTests: [...new Set(prescribedTests)],
+    prescribedPharmacyItems: [...new Set(prescribedPharmacyItems)],
     diagnosticInvoiceTests: [...new Set(diagnosticInvoiceTests)],
     irrelevantTests,
     hasDiagnosticClaim,
@@ -237,6 +253,7 @@ function toDecisionDto(claimDoc) {
     lineItems: claim.lineItems || [],
     documentTypes: claim.documentTypes || [],
     prescribedTests: claim.prescribedTests || [],
+    prescribedPharmacyItems: claim.prescribedPharmacyItems || [],
     diagnosticInvoiceTests: claim.diagnosticInvoiceTests || [],
     irrelevant_tests: claim.irrelevantTests || [],
     irrelevantTests: claim.irrelevantTests || [],

@@ -15,8 +15,93 @@ const STOP_WORDS = new Set([
   'the',
 ]);
 
+const PHARMACY_STOP_WORDS = new Set([
+  'tab',
+  'tablet',
+  'tablets',
+  'cap',
+  'capsule',
+  'capsules',
+  'syrup',
+  'sachet',
+  'strip',
+  'strips',
+  'of',
+  'mg',
+  'ml',
+  'gm',
+  'g',
+  'mcg',
+  'iu',
+  'tabs',
+  'caps',
+  'days',
+  'day',
+  'after',
+  'food',
+  'before',
+  'sos',
+  'bd',
+  'tid',
+  'tds',
+  'od',
+  'hs',
+  'qid',
+  'water',
+  'sip',
+  'throughout',
+  'for',
+  'with',
+  'if',
+  'fever',
+]);
+
 function docTypeFrom(doc) {
   return (doc.documentType || doc.extractedFields?.documentType || 'other').toLowerCase();
+}
+
+function hasPrescriptionEvidence(claim, docs) {
+  const types = new Set([...(claim.documentTypes || []), ...docs.map(docTypeFrom)].map(t => String(t).toLowerCase()));
+  const docsHavePrescriptionContent = docs.some(doc => {
+    const fields = doc.extractedFields || {};
+    return docTypeFrom(doc) === 'prescription'
+      || !!fields.doctorName
+      || !!fields.doctorRegNo
+      || !!fields.diagnosis
+      || !!fields.treatment
+      || (Array.isArray(fields.prescription) && fields.prescription.length > 0)
+      || (Array.isArray(fields.procedures) && fields.procedures.length > 0)
+      || (Array.isArray(fields.tests_prescribed) && fields.tests_prescribed.length > 0);
+  });
+  const hasClinicalText = !!(
+    claim.doctor
+    || claim.docRegNo
+    || (claim.prescribedTests || []).length
+    || (claim.prescribedPharmacyItems || []).length
+  );
+  return types.has('prescription') || docsHavePrescriptionContent || hasClinicalText;
+}
+
+function hasBillEvidence(claim, docs) {
+  const types = new Set([...(claim.documentTypes || []), ...docs.map(docTypeFrom)].map(t => String(t).toLowerCase()));
+  const docHasAmount = docs.some(doc => {
+    const fields = doc.extractedFields || {};
+    return Number(fields.totalAmount) > 0 || (Array.isArray(fields.lineItems) && fields.lineItems.length > 0);
+  });
+  return types.has('bill')
+    || types.has('lab_report')
+    || (claim.lineItems || []).length > 0
+    || Number(claim.claimed) > 0
+    || docHasAmount;
+}
+
+function samePageDiagnosticTests(docs) {
+  return docs
+    .filter(doc => docTypeFrom(doc) === 'prescription')
+    .flatMap(doc => Array.isArray(doc.extractedFields?.lineItems) ? doc.extractedFields.lineItems : [])
+    .filter(item => /diagnostic|test|scan|x-?ray|mri|ct|cbc|ecg|ultrasound|lab/i.test(`${item.category || ''} ${item.description || ''}`))
+    .map(item => item.description)
+    .filter(Boolean);
 }
 
 function normalizeTestName(value = '') {
@@ -58,18 +143,36 @@ function testsMatch(a, b) {
   return shared.length > 0 && shared.length >= Math.min(aTokens.size, bTokens.size);
 }
 
+function tokensForMedicine(value = '') {
+  return normalizeTestName(value)
+    .split(/\s+/)
+    .filter(token => token && !PHARMACY_STOP_WORDS.has(token) && !/^\d+$/.test(token));
+}
+
+function medicinesMatch(a, b) {
+  const aText = normalizeTestName(a);
+  const bText = normalizeTestName(b);
+  if (!aText || !bText) return false;
+  if (aText.includes(bText) || bText.includes(aText)) return true;
+
+  const aTokens = new Set(tokensForMedicine(a));
+  const bTokens = new Set(tokensForMedicine(b));
+  const shared = [...aTokens].filter(token => bTokens.has(token));
+  return shared.length > 0;
+}
+
 function isAncillaryDiagnostic(item) {
   return /sample collection|collection charge|home collection|handling/i.test(item.description || '');
 }
 
-function applyDiagnosticSupport(claim, hasBill) {
+function applyDiagnosticSupport(claim, hasBill, docs) {
   const diagnosticItems = (claim.lineItems || []).filter(item => item.payable !== false && item.category === 'diagnostic');
   if (!diagnosticItems.length) {
     return { status: 'pass', detail: 'No diagnostic claim submitted', rejectedItems: [], matchedCount: 0 };
   }
 
   const prescribedTests = claim.prescribedTests || [];
-  const invoiceTests = claim.diagnosticInvoiceTests || [];
+  const invoiceTests = [...new Set([...(claim.diagnosticInvoiceTests || []), ...samePageDiagnosticTests(docs)])];
   const hasPrescribedTests = prescribedTests.length > 0;
   const hasDiagnosticEvidence = hasBill && invoiceTests.length > 0;
   const rejectedItems = [];
@@ -137,12 +240,49 @@ function applyDiagnosticSupport(claim, hasBill) {
   };
 }
 
+function applyPharmacySupport(claim) {
+  const pharmacyItems = (claim.lineItems || []).filter(item =>
+    item.payable !== false
+    && item.category === 'pharmacy'
+    && !item.exclusionMatch
+  );
+  if (!pharmacyItems.length) {
+    return { status: 'pass', detail: 'No pharmacy claim submitted', rejectedItems: [], matchedCount: 0 };
+  }
+
+  const prescribedItems = claim.prescribedPharmacyItems || [];
+  const rejectedItems = [];
+  let matchedCount = 0;
+
+  for (const item of pharmacyItems) {
+    const matched = prescribedItems.some(prescribed => medicinesMatch(item.description, prescribed));
+    item.prescriptionMatched = matched;
+    if (matched) {
+      matchedCount += 1;
+      continue;
+    }
+
+    item.payable = false;
+    item.rejectionReason = 'Not prescribed';
+    rejectedItems.push(`${item.description} - not prescribed`);
+  }
+
+  const hasOtherPayable = (claim.lineItems || []).some(item => item.payable !== false);
+  return {
+    status: rejectedItems.length ? hasOtherPayable ? 'warn' : 'fail' : 'pass',
+    detail: rejectedItems.length
+      ? `Unprescribed pharmacy item(s): ${rejectedItems.join('; ')}`
+      : `Pharmacy bill items match prescription (${matchedCount} item(s))`,
+    rejectedItems,
+    matchedCount,
+  };
+}
+
 export function runDocuments({ claim, extractedDocs }) {
   const trail = [];
   const docs = extractedDocs || [];
-  const types = new Set([...(claim.documentTypes || []), ...docs.map(docTypeFrom)].map(t => String(t).toLowerCase()));
-  const hasPrescription = types.has('prescription');
-  const hasBill = types.has('bill') || types.has('lab_report');
+  const hasPrescription = hasPrescriptionEvidence(claim, docs);
+  const hasBill = hasBillEvidence(claim, docs);
   const missing = [];
 
   if (!hasPrescription) missing.push('prescription');
@@ -160,7 +300,8 @@ export function runDocuments({ claim, extractedDocs }) {
       : 'No documents uploaded',
   });
 
-  const diagnosticSupport = applyDiagnosticSupport(claim, hasBill);
+  const diagnosticSupport = applyDiagnosticSupport(claim, hasBill, docs);
+  const pharmacySupport = applyPharmacySupport(claim);
   trail.push({
     step: 'documents',
     ruleId: 'INVALID_PRESCRIPTION',
@@ -180,6 +321,19 @@ export function runDocuments({ claim, extractedDocs }) {
       diagnosticInvoiceTests: claim.diagnosticInvoiceTests || [],
       rejectedItems: diagnosticSupport.rejectedItems,
       matchedCount: diagnosticSupport.matchedCount,
+    },
+  });
+
+  trail.push({
+    step: 'documents',
+    ruleId: 'PHARMACY_NOT_PRESCRIBED',
+    label: 'Pharmacy items match prescription',
+    status: pharmacySupport.status,
+    detail: pharmacySupport.detail,
+    evidence: {
+      prescribedPharmacyItems: claim.prescribedPharmacyItems || [],
+      rejectedItems: pharmacySupport.rejectedItems,
+      matchedCount: pharmacySupport.matchedCount,
     },
   });
 
