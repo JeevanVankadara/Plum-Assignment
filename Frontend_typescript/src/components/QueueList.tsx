@@ -1,11 +1,20 @@
 import { useMemo, useState } from "react";
 import type { ClaimSummary } from "../lib/types";
 
+type QueueFilter = "ALL" | "APPROVED" | "REJECTED" | "REVIEW";
+
 interface QueueListProps {
   claims: ClaimSummary[];
   selectedId: string | null;
   onSelect: (id: string) => void;
 }
+
+const FILTERS: Array<{ value: QueueFilter; label: string }> = [
+  { value: "ALL", label: "All" },
+  { value: "APPROVED", label: "Approved" },
+  { value: "REJECTED", label: "Rejected" },
+  { value: "REVIEW", label: "Review Needed" },
+];
 
 function statusStyles(status: string): string {
   if (status === "APPROVED") return "text-success bg-success/10";
@@ -22,11 +31,18 @@ function matchesClaim(claim: ClaimSummary, query: string): boolean {
     .some((value) => String(value).toLowerCase().includes(term));
 }
 
+function matchesFilter(claim: ClaimSummary, filter: QueueFilter): boolean {
+  if (filter === "ALL") return true;
+  if (filter === "REVIEW") return claim.status === "PARTIAL" || claim.status === "MANUAL_REVIEW";
+  return claim.status === filter;
+}
+
 export function QueueList({ claims, selectedId, onSelect }: QueueListProps) {
   const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<QueueFilter>("ALL");
   const filteredClaims = useMemo(
-    () => claims.filter((claim) => matchesClaim(claim, query)),
-    [claims, query]
+    () => claims.filter((claim) => matchesFilter(claim, filter) && matchesClaim(claim, query)),
+    [claims, filter, query]
   );
 
   return (
@@ -47,6 +63,22 @@ export function QueueList({ claims, selectedId, onSelect }: QueueListProps) {
           placeholder="Search name or Plum ID"
           className="mt-3 w-full bg-white border border-border rounded-md px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-accent/20"
         />
+        <div className="mt-3 grid grid-cols-2 gap-1 rounded-md bg-white border border-border p-1">
+          {FILTERS.map((item) => (
+            <button
+              key={item.value}
+              type="button"
+              onClick={() => setFilter(item.value)}
+              className={`px-2 py-1.5 rounded text-[10px] font-bold uppercase tracking-wide transition-colors ${
+                filter === item.value
+                  ? "bg-accent text-accent-foreground"
+                  : "text-muted-foreground hover:bg-background"
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
       </div>
       <div className="divide-y divide-border max-h-[420px] overflow-y-auto">
         {filteredClaims.length === 0 ? (

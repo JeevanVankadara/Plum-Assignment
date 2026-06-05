@@ -20,6 +20,7 @@ interface AnalyticsSnapshot {
   approvedTotal: number;
   avgConfidence: number;
   approvalRate: number;
+  rejectionRate: number;
   reviewRate: number;
   decisionMix: DecisionMixItem[];
 }
@@ -56,12 +57,16 @@ function metricColor(status: string): string {
   return "bg-muted-foreground";
 }
 
+function decisionOf(claim: BackendClaimDto): string {
+  return String(claim.decision || claim.status || "PENDING");
+}
+
 function computeAnalytics(claims: BackendClaimDto[]): AnalyticsSnapshot {
   const total = claims.length;
-  const approved = claims.filter((c) => c.decision === "APPROVED").length;
-  const rejected = claims.filter((c) => c.decision === "REJECTED").length;
-  const partial = claims.filter((c) => c.decision === "PARTIAL").length;
-  const manual = claims.filter((c) => c.decision === "MANUAL_REVIEW").length;
+  const approved = claims.filter((c) => decisionOf(c) === "APPROVED").length;
+  const rejected = claims.filter((c) => decisionOf(c) === "REJECTED").length;
+  const partial = claims.filter((c) => decisionOf(c) === "PARTIAL").length;
+  const manual = claims.filter((c) => decisionOf(c) === "MANUAL_REVIEW").length;
   const today = claims.filter((c) => isToday(c.createdAt)).length;
   const claimedTotal = claims.reduce((sum, c) => sum + (Number(c.claimed_amount ?? c.claimed) || 0), 0);
   const approvedTotal = claims.reduce((sum, c) => sum + (Number(c.approved_amount ?? c.approved) || 0), 0);
@@ -80,6 +85,7 @@ function computeAnalytics(claims: BackendClaimDto[]): AnalyticsSnapshot {
     approvedTotal,
     avgConfidence,
     approvalRate: total ? (approved / total) * 100 : 0,
+    rejectionRate: total ? (rejected / total) * 100 : 0,
     reviewRate: total ? ((manual + partial) / total) * 100 : 0,
     decisionMix: [
       { status: "APPROVED", count: approved },
@@ -117,9 +123,10 @@ export default function Analytics() {
   const analytics = useMemo(() => computeAnalytics(claims), [claims]);
   const stats = [
     { label: "Claims Today", value: analytics.today, detail: `${analytics.total} total claims` },
-    { label: "Auto-Approve Rate", value: percent(analytics.approvalRate), detail: `${analytics.approved} approved` },
+    { label: "Approved", value: analytics.approved, detail: `${percent(analytics.approvalRate)} approval rate` },
+    { label: "Rejected", value: analytics.rejected, detail: `${percent(analytics.rejectionRate)} rejection rate` },
     { label: "Avg. Confidence", value: percent(analytics.avgConfidence * 100), detail: "Across processed claims" },
-    { label: "Pending Review", value: analytics.manual, detail: `${analytics.reviewRate.toFixed(1)}% partial/manual` },
+    { label: "Review Needed", value: analytics.partial + analytics.manual, detail: `${analytics.reviewRate.toFixed(1)}% partial/manual` },
   ];
 
   return (
@@ -137,7 +144,7 @@ export default function Analytics() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
           {stats.map((s) => (
             <div key={s.label} className="bg-white border border-border rounded-xl p-5">
               <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">

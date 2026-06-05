@@ -87,6 +87,8 @@ export function adaptClaimSummary(c: BackendClaimDto): ClaimSummary {
     approved: amount(c.approved_amount, c.approved),
     confidence: pct(c.confidence_score ?? c.confidence),
     status: decisionOf(c),
+    adminFinalized: c.adminFinalized === true,
+    adminDecision: c.adminDecision || null,
   };
 }
 
@@ -113,6 +115,8 @@ export function adaptClaimDetail(c: BackendClaimDto): ClaimDetailModel {
     approved,
     confidence: pct(c.confidence_score ?? c.confidence),
     status: decisionOf(c),
+    adminFinalized: c.adminFinalized === true,
+    adminDecision: c.adminDecision || null,
     rules: auditTrail.map((t) => ({
       id: t.ruleId || t._id || "RULE",
       label: t.label || t.ruleId || t.category || "Rule",
@@ -123,5 +127,7 @@ export function adaptClaimDetail(c: BackendClaimDto): ClaimDetailModel {
     rejectedItems: c.rejected_items || c.rejectedItems || [],
     irrelevantTests: c.irrelevant_tests || c.irrelevantTests || [],
     nextSteps: c.next_steps || c.nextSteps || "",
+    adminDecisionAt: c.adminDecisionAt || null,
+    adminNotes: c.adminNotes || null,
   };
 }

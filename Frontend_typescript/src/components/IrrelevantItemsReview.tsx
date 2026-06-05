@@ -4,6 +4,7 @@ interface IrrelevantItemsReviewProps {
   items: IrrelevantTest[];
   excludedMap: Record<string, boolean>;
   onToggle: (key: string) => void;
+  disabled?: boolean;
 }
 
 function money(value: number | undefined): string {
@@ -14,7 +15,7 @@ export function irrelevantItemKey(item: IrrelevantTest, index: number): string {
   return `${item.testName || "test"}-${item.amount || 0}-${index}`;
 }
 
-export function IrrelevantItemsReview({ items, excludedMap, onToggle }: IrrelevantItemsReviewProps) {
+export function IrrelevantItemsReview({ items, excludedMap, onToggle, disabled = false }: IrrelevantItemsReviewProps) {
   if (!items.length) return null;
 
   return (
@@ -50,12 +51,13 @@ export function IrrelevantItemsReview({ items, excludedMap, onToggle }: Irreleva
                 <span>Exclude as irrelevant</span>
                 <button
                   type="button"
-                  onClick={() => onToggle(key)}
+                  onClick={() => !disabled && onToggle(key)}
+                  disabled={disabled}
                   className={`relative h-6 w-11 rounded-full border p-0.5 transition-colors duration-200 ${
                     excluded
                       ? "border-warning/40 bg-warning"
                       : "border-border bg-muted-foreground/20"
-                  }`}
+                  } ${disabled ? "cursor-not-allowed opacity-60" : ""}`}
                   aria-pressed={excluded}
                 >
                   <span

@@ -16,6 +16,8 @@ export const mockClaims: ClaimDetailModel[] = [
     approved: 2151,
     confidence: 84,
     status: "MANUAL_REVIEW",
+    adminFinalized: false,
+    adminDecision: null,
     rules: [
       { id: "R-001", label: "Member Eligibility", state: "pass", detail: "Policy active until 12/2025. OPD cover limit: Rs.10,000/yr." },
       { id: "R-042", label: "Doctor Credentials", state: "pass", detail: "Dr. Sanjay Verma listed provider." },

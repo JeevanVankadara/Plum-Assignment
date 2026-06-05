@@ -54,6 +54,10 @@ export interface BackendClaimDto {
   confidence?: number;
   decision?: ClaimDecision | string;
   status?: ClaimDecision | string;
+  adminFinalized?: boolean;
+  adminDecision?: "APPROVED" | "REJECTED" | null;
+  adminDecisionAt?: string | null;
+  adminNotes?: string | null;
   audit_trail?: BackendAuditTrailItem[];
   auditTrail?: BackendAuditTrailItem[];
   trail?: BackendAuditTrailItem[];
@@ -86,6 +90,8 @@ export interface ClaimSummary {
   approved: number;
   confidence: number;
   status: ClaimDecision | string;
+  adminFinalized: boolean;
+  adminDecision?: "APPROVED" | "REJECTED" | null;
 }
 
 export interface ClaimDetailModel extends ClaimSummary {
@@ -99,6 +105,8 @@ export interface ClaimDetailModel extends ClaimSummary {
   rejectedItems: string[];
   irrelevantTests: IrrelevantTest[];
   nextSteps: string;
+  adminDecisionAt?: string | null;
+  adminNotes?: string | null;
 }
 
 export interface UploadPayload {

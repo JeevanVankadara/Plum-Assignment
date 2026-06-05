@@ -267,6 +267,10 @@ function toDecisionDto(claimDoc) {
     claimed: claim.claimed || 0,
     decision: claim.decision,
     status: claim.decision,
+    adminFinalized: claim.adminFinalized || false,
+    adminDecision: claim.adminDecision || null,
+    adminDecisionAt: claim.adminDecisionAt || null,
+    adminNotes: claim.adminNotes || null,
     approved_amount: claim.approved || 0,
     approved: claim.approved || 0,
     deductions: claim.deductions || 0,
@@ -397,6 +401,12 @@ export async function overrideDecision(req, res, next) {
     const { decision, reason, notes, approved, deductions, irrelevantTestOverrides } = req.body;
     const claim = await Claim.findById(req.params.id);
     if (!claim) return res.status(404).json({ error: 'Claim not found' });
+    if (claim.adminFinalized) {
+      return res.status(409).json({ error: 'Claim decision is already finalized' });
+    }
+    if (!['APPROVED', 'REJECTED'].includes(decision)) {
+      return res.status(400).json({ error: 'Admin final decision must be APPROVED or REJECTED' });
+    }
 
     const previousApproved = Number(claim.approved) || 0;
     claim.decision = decision;
@@ -412,10 +422,19 @@ export async function overrideDecision(req, res, next) {
     }
     if (decision === 'REJECTED') {
       claim.approved = 0;
+      claim.deductions = deductions !== undefined
+        ? Math.max(0, Number(deductions) || 0)
+        : Math.max(0, Number(claim.claimed) || 0);
     } else if (approved !== undefined) {
       claim.approved = Math.max(0, Number(approved) || 0);
+      if (deductions !== undefined) claim.deductions = Math.max(0, Number(deductions) || 0);
+    } else if (deductions !== undefined) {
+      claim.deductions = Math.max(0, Number(deductions) || 0);
     }
-    if (deductions !== undefined) claim.deductions = Math.max(0, Number(deductions) || 0);
+    claim.adminFinalized = true;
+    claim.adminDecision = decision;
+    claim.adminDecisionAt = new Date();
+    claim.adminNotes = notes || reason || null;
     await claim.save();
     const member = await adjustMemberSpendForOverride({
       claim,
@@ -429,9 +448,9 @@ export async function overrideDecision(req, res, next) {
       member: member?._id || claim.member,
       step: 'manual',
       ruleId: 'MANUAL_OVERRIDE',
-      label: 'Manual reviewer decision',
+      label: 'Admin final decision',
       status: decision === 'APPROVED' ? 'pass' : 'fail',
-      detail: reason || notes || `Reviewer set decision to ${decision}`,
+      detail: reason || notes || `Admin finalized claim as ${decision}`,
       order: claim.trail.length,
     });
     claim.trail.push(trail._id);

@@ -24,6 +24,20 @@ function valueOrDash(value?: string): string {
   return value && value !== "Unknown provider" ? value : "-";
 }
 
+function systemSuggestion(status: string): string {
+  if (status === "APPROVED") return "System suggestion: approve";
+  if (status === "REJECTED") return "System suggestion: reject";
+  if (status === "PARTIAL") return "Review needed: partial approval";
+  if (status === "MANUAL_REVIEW") return "Review needed";
+  return "System suggestion pending";
+}
+
+function finalDecisionLabel(decision?: string | null): string {
+  if (decision === "APPROVED") return "Finalized by admin: approved";
+  if (decision === "REJECTED") return "Finalized by admin: rejected";
+  return "Finalized by admin";
+}
+
 function money(value: number): string {
   return `₹${(Number(value) || 0).toLocaleString("en-IN")}.00`;
 }
@@ -71,6 +85,20 @@ export function ClaimDetail({ claim, onDecision }: ClaimDetailProps) {
     excluded: excludedMap[irrelevantItemKey(item, index)] !== false,
   }));
   const hasIrrelevantReview = irrelevantTests.length > 0;
+  const isFinalized = claim.adminFinalized;
+  const fallbackApproval = Math.max(0, claim.claimed - claim.copay);
+  const finalApprovalAmount = claim.status === "REJECTED" && reviewTotals.approved === 0
+    ? fallbackApproval
+    : reviewTotals.approved;
+  const finalApprovalDeductions = Math.max(0, claim.claimed - finalApprovalAmount);
+  const primaryApproveLabel = claim.status === "REJECTED"
+    ? "Approve Anyway"
+    : claim.status === "APPROVED"
+      ? "Finalize Approval"
+      : hasIrrelevantReview
+        ? "Approve Reviewed Amount"
+        : "Approve Final";
+  const rejectLabel = claim.status === "REJECTED" ? "Finalize Rejection" : "Reject Claim";
 
   return (
     <div className="bg-white rounded-xl border border-border overflow-hidden shadow-md font-sans">
@@ -87,6 +115,9 @@ export function ClaimDetail({ claim, onDecision }: ClaimDetailProps) {
           <p className="text-sm text-muted-foreground">
             Patient: <span className="text-foreground font-medium">{claim.patient}</span>{" "}
             • ID: <span className="font-mono">{claim.memberId}</span>
+          </p>
+          <p className={`text-[11px] font-bold mt-2 ${isFinalized ? "text-success" : "text-muted-foreground"}`}>
+            {isFinalized ? finalDecisionLabel(claim.adminDecision) : systemSuggestion(String(claim.status))}
           </p>
         </div>
         <div className="text-right">
@@ -189,6 +220,7 @@ export function ClaimDetail({ claim, onDecision }: ClaimDetailProps) {
             <IrrelevantItemsReview
               items={irrelevantTests}
               excludedMap={excludedMap}
+              disabled={isFinalized}
               onToggle={(key) =>
                 setExcludedMap((current) => ({
                   ...current,
@@ -219,32 +251,42 @@ export function ClaimDetail({ claim, onDecision }: ClaimDetailProps) {
             </div>
           </div>
 
-          <div className="flex gap-2 mt-6">
-            <button
-              onClick={() => onDecision(claim.id, "REJECTED", {
-                approved: 0,
-                deductions: claim.claimed,
-                irrelevantTestOverrides: irrelevantOverrides,
-                notes: "Manual reviewer rejected the claim.",
-              })}
-              className="flex-1 bg-white border border-border py-2 rounded text-xs font-bold text-foreground hover:bg-background transition-colors"
-            >
-              Reject Claim
-            </button>
-            <button
-              onClick={() => onDecision(claim.id, "APPROVED", {
-                approved: reviewTotals.approved,
-                deductions: reviewTotals.deductions,
-                irrelevantTestOverrides: irrelevantOverrides,
-                notes: hasIrrelevantReview
-                  ? "Manual reviewer approved the reviewed amount after irrelevant-test toggle review."
-                  : "Manual reviewer approved the claim.",
-              })}
-              className="flex-1 bg-accent text-accent-foreground py-2 rounded text-xs font-bold hover:bg-accent/90 transition-all shadow-lg shadow-accent/10"
-            >
-              {hasIrrelevantReview ? "Approve Reviewed Amount" : "Approve Final"}
-            </button>
-          </div>
+          {isFinalized ? (
+            <div className="mt-6 rounded border border-success/20 bg-success/5 px-3 py-2 text-xs font-bold text-success">
+              {finalDecisionLabel(claim.adminDecision)}
+            </div>
+          ) : (
+            <div className="flex gap-2 mt-6">
+              <button
+                onClick={() => onDecision(claim.id, "REJECTED", {
+                  approved: 0,
+                  deductions: claim.claimed,
+                  irrelevantTestOverrides: irrelevantOverrides,
+                  notes: "Admin finalized the claim as rejected.",
+                })}
+                className="flex-1 bg-white border border-border py-2 rounded text-xs font-bold text-foreground hover:bg-background transition-colors"
+              >
+                {rejectLabel}
+              </button>
+              <button
+                onClick={() => {
+                  const confirmed = window.confirm("Do you confirm approving this claim?");
+                  if (!confirmed) return;
+                  onDecision(claim.id, "APPROVED", {
+                    approved: finalApprovalAmount,
+                    deductions: claim.status === "REJECTED" ? finalApprovalDeductions : reviewTotals.deductions,
+                    irrelevantTestOverrides: irrelevantOverrides,
+                    notes: hasIrrelevantReview
+                      ? "Admin finalized the reviewed amount after irrelevant-test toggle review."
+                      : "Admin finalized the claim as approved.",
+                  });
+                }}
+                className="flex-1 bg-accent text-accent-foreground py-2 rounded text-xs font-bold hover:bg-accent/90 transition-all shadow-lg shadow-accent/10"
+              >
+                {primaryApproveLabel}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
