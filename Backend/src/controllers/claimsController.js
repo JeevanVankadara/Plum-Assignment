@@ -4,6 +4,7 @@ import ExtractedDoc from '../models/ExtractedDoc.js';
 import AuditTrail from '../models/AuditTrail.js';
 import { extractFromDocument } from '../services/geminiService.js';
 import { adjudicate } from '../services/adjudicationService.js';
+import { adjustMemberSpendForOverride, linkClaimObjectToMember, recordMemberClaim } from '../services/memberService.js';
 
 function newClaimId() {
   return 'CLM_' + crypto.randomBytes(3).toString('hex').toUpperCase();
@@ -238,8 +239,12 @@ function toDecisionDto(claimDoc) {
     _id: claim._id,
     claim_id: claim.claimId,
     claimId: claim.claimId,
+    member_record_id: claim.member?._id || claim.member || null,
+    memberRecordId: claim.member?._id || claim.member || null,
     member_id: claim.memberId,
     memberId: claim.memberId,
+    memberTotalSpent: claim.member?.totalSpent,
+    memberClaimCount: claim.member?.claimCount,
     patient: claim.patient,
     age: claim.age,
     provider: claim.provider,
@@ -334,12 +339,25 @@ export async function createClaim(req, res, next) {
       previousClaims,
     });
 
+    const member = await recordMemberClaim({
+      claimId,
+      memberId: claimDraft.memberId,
+      patient: claimDraft.patient,
+      approved: result.approved,
+    });
+
     const trailDocs = await AuditTrail.insertMany(
-      result.trail.map(t => ({ ...t, claimId }))
+      result.trail.map(t => ({
+        ...t,
+        claimId,
+        memberId: claimDraft.memberId,
+        member: member?._id,
+      }))
     );
 
     const claim = await Claim.create({
       ...claimDraft,
+      member: member?._id,
       deductions: result.deductions,
       copay: result.copay,
       approved: result.approved,
@@ -353,6 +371,7 @@ export async function createClaim(req, res, next) {
       documents: extractedDocs.map(d => d._id),
       trail: trailDocs.map(t => t._id),
     });
+    await linkClaimObjectToMember(member, claim._id);
 
     res.status(201).json(toDecisionDto(await populated(claim._id)));
   } catch (err) { next(err); }
@@ -379,6 +398,7 @@ export async function overrideDecision(req, res, next) {
     const claim = await Claim.findById(req.params.id);
     if (!claim) return res.status(404).json({ error: 'Claim not found' });
 
+    const previousApproved = Number(claim.approved) || 0;
     claim.decision = decision;
     if (Array.isArray(irrelevantTestOverrides)) {
       claim.irrelevantTests = (claim.irrelevantTests || []).map(test => {
@@ -397,9 +417,16 @@ export async function overrideDecision(req, res, next) {
     }
     if (deductions !== undefined) claim.deductions = Math.max(0, Number(deductions) || 0);
     await claim.save();
+    const member = await adjustMemberSpendForOverride({
+      claim,
+      previousApproved,
+      nextApproved: claim.approved,
+    });
 
     const trail = await AuditTrail.create({
       claimId: claim.claimId,
+      memberId: claim.memberId,
+      member: member?._id || claim.member,
       step: 'manual',
       ruleId: 'MANUAL_OVERRIDE',
       label: 'Manual reviewer decision',
@@ -415,5 +442,5 @@ export async function overrideDecision(req, res, next) {
 }
 
 async function populated(id) {
-  return Claim.findById(id).populate('documents').populate('trail');
+  return Claim.findById(id).populate('member').populate('documents').populate('trail');
 }

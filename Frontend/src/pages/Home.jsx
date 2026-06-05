@@ -20,6 +20,7 @@ export default function Home() {
       const adapted = list.map(adaptClaimSummary);
       setClaims(adapted);
       setSelectedId((cur) => cur || adapted[0]?.id || null);
+      setError(null);
     } catch (e) {
       setError(e.message);
     }
@@ -31,7 +32,12 @@ export default function Home() {
     if (!selectedId) { setSelected(null); return; }
     let cancelled = false;
     api.get(selectedId)
-      .then((c) => !cancelled && setSelected(adaptClaimDetail(c)))
+      .then((c) => {
+        if (!cancelled) {
+          setSelected(adaptClaimDetail(c));
+          setError(null);
+        }
+      })
       .catch((e) => !cancelled && setError(e.message));
     return () => { cancelled = true; };
   }, [selectedId]);
@@ -42,6 +48,7 @@ export default function Home() {
       const created = await api.create({ memberId, files });
       await refreshList();
       setSelectedId(created._id);
+      setError(null);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -58,6 +65,7 @@ export default function Home() {
       const updated = await api.decide(id, backendDecision, review);
       setSelected(adaptClaimDetail(updated));
       await refreshList();
+      setError(null);
     } catch (e) {
       setError(e.message);
     }

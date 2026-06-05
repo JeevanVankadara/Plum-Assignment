@@ -7,6 +7,7 @@ const modelName = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
 if (!apiKey) console.warn('GEMINI_API_KEY missing — extraction will fail until set.');
 
 const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
+const GEMINI_MAX_RETRIES = Number(process.env.GEMINI_MAX_RETRIES || 3);
 
 const EXTRACTION_PROMPT = `You are a medical claim document parser.
 Extract the following fields from the attached document and return STRICT JSON only (no markdown, no commentary).
@@ -109,13 +110,41 @@ function logGeminiExtraction(file, parsed, rawText) {
   }
 }
 
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function isRetryableGeminiError(error) {
+  const message = String(error?.message || '');
+  return error?.status === 503
+    || error?.status === 429
+    || /503|429|high demand|service unavailable|temporarily/i.test(message);
+}
+
+async function generateWithRetry(model, parts) {
+  let lastError;
+  for (let attempt = 0; attempt <= GEMINI_MAX_RETRIES; attempt += 1) {
+    try {
+      return await model.generateContent(parts);
+    } catch (error) {
+      lastError = error;
+      if (!isRetryableGeminiError(error) || attempt === GEMINI_MAX_RETRIES) throw error;
+
+      const delayMs = 1200 * (attempt + 1);
+      console.warn(`Gemini temporary error, retrying in ${delayMs}ms (${attempt + 1}/${GEMINI_MAX_RETRIES})`);
+      await sleep(delayMs);
+    }
+  }
+  throw lastError;
+}
+
 export async function extractFromDocument(file) {
   if (!genAI) throw new Error('Gemini not configured');
 
   const buffer = await fs.readFile(file.path);
   const model = genAI.getGenerativeModel({ model: modelName });
 
-  const result = await model.generateContent([
+  const result = await generateWithRetry(model, [
     { text: EXTRACTION_PROMPT },
     { inlineData: { data: buffer.toString('base64'), mimeType: file.mimetype } },
   ]);

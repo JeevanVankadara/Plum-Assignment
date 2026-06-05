@@ -19,6 +19,7 @@ const irrelevantTestSchema = new mongoose.Schema({
 
 const claimSchema = new mongoose.Schema({
   claimId: { type: String, unique: true, index: true },
+  member: { type: mongoose.Schema.Types.ObjectId, ref: 'Member' },
   memberId: String,
   patient: String,
   age: Number,

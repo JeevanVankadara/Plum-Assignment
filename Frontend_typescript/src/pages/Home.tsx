@@ -20,6 +20,7 @@ export default function Home() {
       const adapted = list.map(adaptClaimSummary);
       setClaims(adapted);
       setSelectedId((cur) => cur || adapted[0]?.id || null);
+      setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -38,7 +39,10 @@ export default function Home() {
     api
       .get(selectedId)
       .then((c) => {
-        if (!cancelled) setSelected(adaptClaimDetail(c));
+        if (!cancelled) {
+          setSelected(adaptClaimDetail(c));
+          setError(null);
+        }
       })
       .catch((e) => {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e));
@@ -55,6 +59,7 @@ export default function Home() {
       const created = await api.create({ memberId, files });
       await refreshList();
       setSelectedId(created._id || created.id || null);
+      setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -67,6 +72,7 @@ export default function Home() {
       const updated = await api.decide(id, decision, review);
       setSelected(adaptClaimDetail(updated));
       await refreshList();
+      setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
