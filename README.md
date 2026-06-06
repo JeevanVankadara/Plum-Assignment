@@ -12,8 +12,13 @@ The application contains:
 - `Frontend_typescript` - React, Vite, TypeScript, Tailwind UI used for the deployed frontend.
 - `Frontend` - Original JSX frontend copy.
 - `policy_terms.json` - Machine-readable policy limits, exclusions, co-pay, waiting period, covered services, and network hospitals.
-- `adjudication_rules.md` - Rule flow used as the implementation reference.
-- `plum_intern_assignment.md` - Assignment requirements and expected output format.
+- `test_cases.json` - Assignment test cases and expected outcomes.
+- `Files_given_in_Assignment` - Original markdown files provided with the assignment:
+  - `plum_intern_assignment.md`
+  - `adjudication_rules.md`
+  - `sample_documents_guide.md`
+
+The backend also keeps runtime copies of the policy/rules under `Backend/src/data`, because the rule loader reads from that backend data folder.
 
 ## Core Behavior
 
@@ -131,7 +136,7 @@ Do not include a trailing slash in `CORS_ORIGIN`.
 
 - Gemini-based document extraction for images/PDFs.
 - Console logging of main Gemini extraction fields for testing.
-- Rule-based adjudication aligned with `adjudication_rules.md`.
+- Rule-based adjudication aligned with `Files_given_in_Assignment/adjudication_rules.md`.
 - Required document validation using evidence, so a single page can act as both prescription and bill when it contains both clinical and billing information.
 - Item-level exclusions for cosmetic, supplement, non-prescribed, and unsupported items.
 - Diagnostic prescription-to-invoice matching with fuzzy matching.
@@ -141,6 +146,66 @@ Do not include a trailing slash in `CORS_ORIGIN`.
 - Editable admin notes and next steps saved to MongoDB.
 - Member collection created lazily from claim member IDs.
 - Dynamic analytics, queue search, and status filters.
+
+## Running The Assignment Test Cases
+
+The assignment test scenarios are listed in `test_cases.json`.
+
+There are two practical ways to test them.
+
+### 1. Run Backend Automated Tests
+
+The backend includes rule tests that cover the main assignment behavior and the extra demo rules added during development.
+
+```bash
+cd Backend
+npm install
+npm test
+```
+
+These tests run without calling Gemini. They use mocked extracted document data and directly test the adjudication engine.
+
+### 2. Run Test Cases Through The Application UI
+
+Use this when you want to verify the full upload flow with Gemini extraction.
+
+1. Start the backend.
+
+```bash
+cd Backend
+npm install
+npm run dev
+```
+
+2. Start the TypeScript frontend in a second terminal.
+
+```bash
+cd Frontend_typescript
+npm install
+npm run dev
+```
+
+3. Open the app.
+
+```text
+http://localhost:5173
+```
+
+4. Open `test_cases.json` and pick a test case such as `TC001`, `TC002`, or `TC003`.
+
+5. Create or use mock prescription/bill/lab/pharmacy images matching the test case data. Use `Files_given_in_Assignment/sample_documents_guide.md` as the format guide.
+
+6. Upload the documents in the New Adjudication card and enter the test case member ID.
+
+7. Compare the app result with the expected output in `test_cases.json`:
+
+- decision: `APPROVED`, `REJECTED`, `PARTIAL`, or `MANUAL_REVIEW`
+- approved amount
+- rejection reasons or rejected items
+- confidence score
+- audit trail rules
+
+Note: Some expected values can differ from the original `test_cases.json` because the implementation intentionally uses partial approval for limit excess and item-level deductions for mixed claims instead of rejecting the full claim.
 
 ## Assumptions
 
