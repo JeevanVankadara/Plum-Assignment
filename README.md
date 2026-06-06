@@ -20,24 +20,6 @@ The application contains:
 
 The backend also keeps runtime copies of the policy/rules under `Backend/src/data`, because the rule loader reads from that backend data folder.
 
-## Core Behavior
-
-The backend returns decisions in the required assignment format:
-
-```json
-{
-  "claim_id": "CLM_XXXXX",
-  "decision": "APPROVED/REJECTED/PARTIAL/MANUAL_REVIEW",
-  "approved_amount": 0,
-  "rejection_reasons": [],
-  "confidence_score": 0.95,
-  "notes": "Additional observations",
-  "next_steps": "What the claimant should do"
-}
-```
-
-Additional fields are also returned for the UI, including audit trail, extracted documents, rejected items, deductions, co-pay, irrelevant tests, and admin finalization status.
-
 ## Run Locally
 
 ### Backend
