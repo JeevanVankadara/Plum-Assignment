@@ -15,24 +15,6 @@ The application contains:
 - `adjudication_rules.md` - Rule flow used as the implementation reference.
 - `plum_intern_assignment.md` - Assignment requirements and expected output format.
 
-## Core Behavior
-
-The backend returns decisions in the required assignment format:
-
-```json
-{
-  "claim_id": "CLM_XXXXX",
-  "decision": "APPROVED/REJECTED/PARTIAL/MANUAL_REVIEW",
-  "approved_amount": 0,
-  "rejection_reasons": [],
-  "confidence_score": 0.95,
-  "notes": "Additional observations",
-  "next_steps": "What the claimant should do"
-}
-```
-
-Additional fields are also returned for the UI, including audit trail, extracted documents, rejected items, deductions, co-pay, irrelevant tests, and admin finalization status.
-
 ## Run Locally
 
 ### Backend
