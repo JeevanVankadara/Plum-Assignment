@@ -1,4 +1,4 @@
-# plom-claim Backend
+# PLUM-claim Backend
 
 Node.js + Express + MongoDB backend for OPD claim adjudication.
 Extracts fields from uploaded documents via Gemini Flash, runs the rules from
@@ -21,7 +21,7 @@ Backend runs on `http://localhost:4000`.
 Change only `MONGO_URI` in `.env`:
 
 ```text
-MONGO_URI=mongodb+srv://<user>:<pass>@cluster.xxx.mongodb.net/plom-claim
+MONGO_URI=mongodb+srv://<user>:<pass>@cluster.xxx.mongodb.net/PLUM-claim
 ```
 
 ## API

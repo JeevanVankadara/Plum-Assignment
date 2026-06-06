@@ -27,5 +27,5 @@ const PORT = process.env.PORT || 4000;
 (async () => {
   await connectDB();
   loadPolicy();
-  app.listen(PORT, () => console.log(`plom-claim backend running on :${PORT}`));
+  app.listen(PORT, () => console.log(`PLUM-claim backend running on :${PORT}`));
 })();

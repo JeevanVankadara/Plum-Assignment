@@ -6,7 +6,7 @@ export function Footer() {
       <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-2">
           <span className="font-display text-sm tracking-tight font-bold text-accent">
-            PLOM<span className="font-normal opacity-50">CLAIMS</span>
+            PLUM<span className="font-normal opacity-50">CLAIMS</span>
           </span>
           <span className="text-xs text-muted-foreground">
             AI-assisted OPD claim adjudication
@@ -24,7 +24,7 @@ export function Footer() {
           </Link>
         </div>
         <div className="text-[10px] text-muted-foreground">
-          &copy; {new Date().getFullYear()} PLOMCLAIMS. All rights reserved.
+          &copy; {new Date().getFullYear()} PLUMCLAIMS. All rights reserved.
         </div>
       </div>
     </footer>

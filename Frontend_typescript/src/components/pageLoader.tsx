@@ -29,7 +29,7 @@ export function PageLoader() {
         {/* Brand */}
         <div className="text-center">
           <h1 className="font-display text-lg font-bold tracking-tight text-foreground">
-            PLOM<span className="font-normal opacity-50">CLAIM</span>
+            PLUM<span className="font-normal opacity-50">CLAIM</span>
           </h1>
           <p className="mt-1 text-xs text-muted-foreground font-mono tracking-wide">
             Initializing{dots}

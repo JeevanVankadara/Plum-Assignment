@@ -12,7 +12,7 @@ export function InitialLoaderHTML() {
     </div>
     <div style="text-align:center">
       <h1 style="font-family:'Inter Tight',Inter,system-ui,sans-serif;font-size:18px;font-weight:700;color:hsl(220,20%,12%);letter-spacing:-0.02em;margin:0">
-        PLOM<span style="font-weight:400;opacity:0.5">CLAIM</span>
+        PLUM<span style="font-weight:400;opacity:0.5">CLAIM</span>
       </h1>
       <p id="loader-text" style="margin-top:4px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;color:hsl(220,10%,45%);letter-spacing:0.05em">Initializing</p>
     </div>

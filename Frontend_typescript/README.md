@@ -1,4 +1,4 @@
-# plom-claim - AI OPD Claim Adjudication (TypeScript Frontend)
+# PLUM-claim - AI OPD Claim Adjudication (TypeScript Frontend)
 
 Standalone React + Vite + Tailwind CSS frontend converted to TypeScript.
 
